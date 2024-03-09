@@ -1,15 +1,14 @@
 {
-  "name": "telegram_bot_template",
+  "name": "bills-to-notion-database",
   "version": "1.0.0",
-  "description": "this is a starter point to use Telegram-cms module",
-  "main": "app.js",
+  "main": "index.js",
+  "repository": "https://github.com/navidshad/bills-to-notion-database.git",
+  "author": "Navid Shad <navidshad72@gmail.com>",
+  "license": "MIT",
+  "private": true,
   "dependencies": {
-    "telegram-cms": "*"
-  },
-  "devDependencies": {},
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "navid shad (navidshad72@gmail.com)",
-  "license": "free"
+    "langchain": "^0.1.25",
+    "node-telegram-bot-api": "^0.65.0",
+    "zod-to-json-schema": "^3.22.4"
+  }
 }
