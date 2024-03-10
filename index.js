@@ -37,14 +37,26 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  const imageId = msg.photo[3]?.file_id || msg.photo[2]?.file_id;
+  // send a message to the chat acknowledging receipt of their message
+  //
+  const pendingMsg = await bot.sendMessage(chatId, "Pending");
+  bot.deleteMessage(chatId, msg.message_id);
 
+  // calculate the receipt
+  //
+  const imageId = msg.photo[3]?.file_id || msg.photo[2]?.file_id;
   const response = await getReceiptDetail(imageId);
 
+  // send back the calculated receipt
+  //
   bot.sendPhoto(chatId, imageId, {
     caption: response.text,
     reply_markup: reply_markup,
   });
+
+  // delete the pending message
+  //
+  bot.deleteMessage(chatId, pendingMsg.message_id);
 });
 
 bot.on("callback_query", async (query) => {
