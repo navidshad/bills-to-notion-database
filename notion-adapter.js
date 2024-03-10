@@ -49,7 +49,16 @@ async function addItem(title, totalPrice, date, description) {
             },
           ],
         },
-        "Price USD": {
+        $code: {
+          rich_text: [
+            {
+              text: {
+                content: "THB",
+              },
+            },
+          ],
+        },
+        Price: {
           number: totalPrice,
         },
         Date: {

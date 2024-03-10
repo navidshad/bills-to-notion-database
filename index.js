@@ -82,7 +82,18 @@ bot.on("callback_query", async (query) => {
     });
   }
 
-  if (query.data === "add-to-database" && query.message) {
+  if (
+    query.data === "add-to-database" &&
+    query.message &&
+    query.message.caption
+  ) {
+    // remove inline keyboard
+    //
+    bot.editMessageCaption(query.message.caption, {
+      chat_id: query.message.chat.id,
+      message_id: query.message.message_id,
+    });
+
     let billRecord = null;
     try {
       billRecord = JSON.parse(query.message.caption || "{}");
@@ -96,9 +107,22 @@ bot.on("callback_query", async (query) => {
 
     try {
       await notionAdapter.addItem(title, total_price, date, description);
-      bot.sendMessage(query.message.chat.id, "Added to database");
+
+      const caption = query.message.caption + "\n\nAdded to database";
+      bot.editMessageCaption(caption, {
+        chat_id: query.message.chat.id,
+        message_id: query.message.message_id,
+      });
     } catch (error) {
-      bot.sendMessage(query.message.chat.id, "Error adding to database");
+      bot.sendMessage(
+        query.message.chat.id,
+        "Error adding to database\n" + error
+      );
+      bot.editMessageCaption(query.message.caption, {
+        chat_id: query.message.chat.id,
+        message_id: query.message.message_id,
+        reply_markup: reply_markup,
+      });
     }
   }
 });

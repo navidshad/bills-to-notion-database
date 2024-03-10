@@ -6,6 +6,9 @@
   "author": "Navid Shad <navidshad72@gmail.com>",
   "license": "MIT",
   "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "@notionhq/client": "^2.2.14",
     "langchain": "^0.1.25",
