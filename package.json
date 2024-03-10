@@ -7,6 +7,7 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
+    "@notionhq/client": "^2.2.14",
     "langchain": "^0.1.25",
     "node-telegram-bot-api": "^0.65.0",
     "zod-to-json-schema": "^3.22.4"

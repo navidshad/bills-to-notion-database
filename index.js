@@ -1,6 +1,7 @@
 const TelegramBot = require("node-telegram-bot-api");
 const textChain = require("./text-chain");
 const visionChain = require("./vision-chain");
+const notionAdapter = require("./notion-adapter");
 
 // replace the value below with the Telegram token you receive from @BotFather
 const token = process.env.BOT_TOKEN || "";
@@ -37,26 +38,29 @@ bot.on("message", async (msg) => {
     return;
   }
 
+  const imageId = msg.photo[3]?.file_id || msg.photo[2]?.file_id;
+
+  // delete the message
+  //
+  bot.deleteMessage(chatId, msg.message_id);
+
   // send a message to the chat acknowledging receipt of their message
   //
-  const pendingMsg = await bot.sendMessage(chatId, "Pending");
-  bot.deleteMessage(chatId, msg.message_id);
+  const previewMessage = await bot.sendPhoto(chatId, imageId, {
+    caption: "Pending",
+  });
 
   // calculate the receipt
   //
-  const imageId = msg.photo[3]?.file_id || msg.photo[2]?.file_id;
   const response = await getReceiptDetail(imageId);
 
   // send back the calculated receipt
   //
-  bot.sendPhoto(chatId, imageId, {
-    caption: response.text,
+  bot.editMessageCaption(response.text, {
+    chat_id: chatId,
+    message_id: previewMessage.message_id,
     reply_markup: reply_markup,
   });
-
-  // delete the pending message
-  //
-  bot.deleteMessage(chatId, pendingMsg.message_id);
 });
 
 bot.on("callback_query", async (query) => {
@@ -67,7 +71,6 @@ bot.on("callback_query", async (query) => {
     bot.editMessageCaption("Pending", {
       chat_id: query.message.chat.id,
       message_id: query.message.message_id,
-      // reply_markup: reply_markup,
     });
 
     const response = await getReceiptDetail(imageId);
@@ -77,5 +80,25 @@ bot.on("callback_query", async (query) => {
       message_id: query.message.message_id,
       reply_markup: reply_markup,
     });
+  }
+
+  if (query.data === "add-to-database" && query.message) {
+    let billRecord = null;
+    try {
+      billRecord = JSON.parse(query.message.caption || "{}");
+    } catch (error) {
+      console.error("Error parsing bill record:", error);
+    }
+
+    if (!billRecord) return;
+
+    const { title, total_price, date, description } = billRecord;
+
+    try {
+      await notionAdapter.addItem(title, total_price, date, description);
+      bot.sendMessage(query.message.chat.id, "Added to database");
+    } catch (error) {
+      bot.sendMessage(query.message.chat.id, "Error adding to database");
+    }
   }
 });
