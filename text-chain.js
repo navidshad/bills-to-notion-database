@@ -28,6 +28,7 @@ const chatTemplate = ChatPromptTemplate.fromMessages([
     "user",
     "it is really important to return the result according to the schema",
   ],
+  ["user", "please use a valid ISO 8601 for date"],
   ["system", "JSON result is:"],
 ]);
 

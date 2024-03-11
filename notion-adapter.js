@@ -32,6 +32,22 @@ function flatItems(description) {
   return description;
 }
 
+function normalizeDate(date) {
+  // remove time
+  date = date.split(" ")[0];
+
+  // remove `"`, `'` around the date
+  date = date.replace(/["']/g, "");
+
+  // replace `/` with `-`
+  date = date.split("/").join("-");
+
+  // replace `.` with `-`
+  date = date.split(".").join("-");
+
+  return date;
+}
+
 async function addItem(title, totalPrice, date, description) {
   description = description || "";
   description = flatItems(description);
@@ -63,7 +79,7 @@ async function addItem(title, totalPrice, date, description) {
         },
         Date: {
           date: {
-            start: date,
+            start: normalizeDate(date),
           },
         },
         Desc: {
