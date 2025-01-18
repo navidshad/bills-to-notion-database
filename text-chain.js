@@ -26,20 +26,24 @@ module.exports = {
   generateBillInfo: async (billDetail) => {
     const chatTemplate = ChatPromptTemplate.fromMessages([
       ["user", "Bill: {billDetail}"],
-      ["user", "map this bill to the given schema: {schema}"],
       [
         "user",
         "it is really important to return the result according to the schema",
       ],
-      ["user", "please use a valid ISO 8601 for date"],
+      [
+        "user",
+        "please use a valid ISO 8601 for date, message date is {msg_date}",
+      ],
       ["system", "JSON result is:"],
     ]);
 
     const billRecordSchema = z.object({
       title: z.string(),
       total_price: z.number(),
-      currency_code: z.string(),
-      date: z.date(),
+      currency_code: z.string({
+        description: "if didn't provide, default guess from the bill language",
+      }),
+      date: z.date({ description: "if not provided, use message date" }),
       description: z.string(),
     });
 
@@ -47,15 +51,14 @@ module.exports = {
 
     const chain = chatTemplate.pipe(llm.withStructuredOutput(intentJsonSchema));
 
+    const parsed_date = new Date(Date.now())
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z");
+
     return chain
       .invoke({
         billDetail,
-        schema: JSON.stringify({
-          title: "string",
-          total_price: "number",
-          date: "date",
-          description: "string",
-        }),
+        msg_date: parsed_date,
       })
       .catch((error) => {
         console.error(error);
