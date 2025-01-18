@@ -38,6 +38,7 @@ module.exports = {
     const billRecordSchema = z.object({
       title: z.string(),
       total_price: z.number(),
+      currency_code: z.string(),
       date: z.date(),
       description: z.string(),
     });

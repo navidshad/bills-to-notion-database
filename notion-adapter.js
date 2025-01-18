@@ -48,7 +48,7 @@ function normalizeDate(date) {
   return date;
 }
 
-async function addItem(title, totalPrice, date, description) {
+async function addItem(title, totalPrice, currency_code, date, description) {
   description = description || "";
   description = flatItems(description);
 
@@ -69,7 +69,7 @@ async function addItem(title, totalPrice, date, description) {
           rich_text: [
             {
               text: {
-                content: "THB",
+                content: currency_code,
               },
             },
           ],
@@ -91,11 +91,11 @@ async function addItem(title, totalPrice, date, description) {
             },
           ],
         },
-        Status: {
-          select: {
-            name: "In Trip",
-          },
-        },
+        // Status: {
+        //   select: {
+        //     name: "In Trip",
+        //   },
+        // },
       },
     });
     console.log("Success! Entry added.");

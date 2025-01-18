@@ -59,7 +59,7 @@ bot.on("message", async (msg) => {
 
     // send back the calculated receipt
     //
-    bot.editMessageCaption(JSON.stringify(billDetail), {
+    bot.editMessageCaption(JSON.stringify(billDetail, null, "\t"), {
       chat_id: chatId,
       message_id: previewMessage.message_id,
       reply_markup: reply_markup,
@@ -111,65 +111,112 @@ bot.on("message", async (msg) => {
 });
 
 bot.on("callback_query", async (query) => {
-  if (query.data === "re-calculate" && query.message?.photo) {
-    const imageId =
-      query.message?.photo[3]?.file_id || query.message?.photo[2]?.file_id;
+  //
+  // Recalculate the bill
+  //
+  if (query.data === "re-calculate" && query.message) {
+    if (query.message.photo) {
+      editTextMessage({
+        newText: "Reprocessing your photo...",
+        message: query.message,
+      });
 
-    bot.editMessageCaption("Pending", {
-      chat_id: query.message.chat.id,
-      message_id: query.message.message_id,
-    });
+      const imageId =
+        query.message?.photo[3]?.file_id || query.message?.photo[2]?.file_id;
 
-    const billDetail = await getReceiptDetail(imageId);
+      const billDetail = await getReceiptDetail(imageId);
 
-    bot.editMessageCaption(JSON.stringify(billDetail), {
-      chat_id: query.message.chat.id,
-      message_id: query.message.message_id,
-      reply_markup: reply_markup,
-    });
+      editTextMessage({
+        newText: JSON.stringify(billDetail, null, "\t"),
+        message: query.message,
+        options: {
+          reply_markup: reply_markup,
+        },
+      });
+    } else {
+      editTextMessage({
+        newText: "Reprocessing your bill...",
+        message: query.message,
+      });
+
+      const billDetail = await textChain.generateBillInfo(query.message.text);
+
+      editTextMessage({
+        newText: JSON.stringify(billDetail, null, "\t"),
+        message: query.message,
+        options: {
+          reply_markup: reply_markup,
+        },
+      });
+    }
   }
 
-  if (
-    query.data === "add-to-database" &&
-    query.message &&
-    query.message.caption
-  ) {
+  //
+  // Add to database
+  //
+  if (query.data === "add-to-database" && query.message) {
+    const stringData = query.message.caption || query.message.text;
     // remove inline keyboard
     //
-    bot.editMessageCaption(query.message.caption, {
-      chat_id: query.message.chat.id,
-      message_id: query.message.message_id,
+    editTextMessage({
+      newText: stringData,
+      message: query.message,
     });
 
     let billRecord = null;
     try {
-      billRecord = JSON.parse(query.message.caption || "{}");
+      billRecord = JSON.parse(stringData || "{}");
     } catch (error) {
       console.error("Error parsing bill record:", error);
     }
 
     if (!billRecord) return;
 
-    const { title, total_price, date, description } = billRecord;
+    const { title, total_price, currency_code, date, description } = billRecord;
 
     try {
-      await notionAdapter.addItem(title, total_price, date, description);
+      await notionAdapter.addItem(
+        title,
+        total_price,
+        currency_code,
+        date,
+        description
+      );
 
-      const caption = query.message.caption + "\n\nAdded to database";
-      bot.editMessageCaption(caption, {
-        chat_id: query.message.chat.id,
-        message_id: query.message.message_id,
+      const caption = stringData + "\n\nAdded to database";
+      editTextMessage({
+        newText: caption,
+        message: query.message,
       });
     } catch (error) {
       bot.sendMessage(
         query.message.chat.id,
         "Error adding to database\n" + error
       );
-      bot.editMessageCaption(query.message.caption, {
-        chat_id: query.message.chat.id,
-        message_id: query.message.message_id,
-        reply_markup: reply_markup,
+
+      editTextMessage({
+        newText: stringData,
+        message: query.message,
+        options: { reply_markup },
       });
     }
   }
 });
+
+function editTextMessage({ newText, message, options = {} }) {
+  const { caption, messageId, text } = message;
+
+  if (caption) {
+    bot.editMessageCaption(newText, {
+      chat_id: message.chat.id,
+      message_id: message.message_id,
+      ...options,
+    });
+  } else {
+    bot.editMessageText(newText, {
+      chat_id: message.chat.id,
+      message_id: message.message_id,
+      ...options,
+    });
+  }
+}
