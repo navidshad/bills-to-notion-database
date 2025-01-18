@@ -44,7 +44,8 @@ module.exports = {
       }),
       total_price: z.number(),
       currency_code: z.string({
-        description: "if didn't provide, default guess from the bill language",
+        description:
+          "if didn't provide, default is " + process.env.DEFAULT_CURRENCY,
       }),
       date: z.date({ description: "if not provided, use message date" }),
       description: z.string(),
