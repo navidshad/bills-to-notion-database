@@ -38,7 +38,10 @@ module.exports = {
     ]);
 
     const billRecordSchema = z.object({
-      title: z.string(),
+      title: z.string({
+        description:
+          "title of the bill, generated from the bill detail, don't write 'bill' or none sense words",
+      }),
       total_price: z.number(),
       currency_code: z.string({
         description: "if didn't provide, default guess from the bill language",
