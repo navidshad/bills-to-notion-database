@@ -6,36 +6,46 @@ const {
   ChatPromptTemplate,
 } = require("@langchain/core/prompts");
 const { zodToJsonSchema } = require("zod-to-json-schema");
+const { extractJSON } = require("./helpers");
 
-const billRecordSchema = z.object({
-  title: z.string(),
-  total_price: z.number(),
-  date: z.date(),
-  description: z.string(),
-});
+// const billRecordSchema = z.object({
+//   title: z.string(),
+//   total_price: z.number(),
+//   date: z.date(),
+//   description: z.string(),
+// });
 
-const schema = zodToJsonSchema(billRecordSchema);
+// const schema = zodToJsonSchema(billRecordSchema);
 
 const llm = new ChatOpenAI({
-  modelName: "gpt-4",
+  modelName: "gpt-4o",
   openAIApiKey: process.env.OPENAI_API_KEY,
 });
 
-const chatTemplate = ChatPromptTemplate.fromMessages([
-  ["user", "Bill: {billDetail}"],
-  ["user", "map this bill to the given schema: {schema}"],
-  [
-    "user",
-    "it is really important to return the result according to the schema",
-  ],
-  ["user", "please use a valid ISO 8601 for date"],
-  ["system", "JSON result is:"],
-]);
-
-const chain = new LLMChain({ llm, prompt: chatTemplate });
-
 module.exports = {
-  invoke: async (billDetail) => {
+  generateBillInfo: async (billDetail) => {
+    const chatTemplate = ChatPromptTemplate.fromMessages([
+      ["user", "Bill: {billDetail}"],
+      ["user", "map this bill to the given schema: {schema}"],
+      [
+        "user",
+        "it is really important to return the result according to the schema",
+      ],
+      ["user", "please use a valid ISO 8601 for date"],
+      ["system", "JSON result is:"],
+    ]);
+
+    const billRecordSchema = z.object({
+      title: z.string(),
+      total_price: z.number(),
+      date: z.date(),
+      description: z.string(),
+    });
+
+    const intentJsonSchema = zodToJsonSchema(billRecordSchema);
+
+    const chain = chatTemplate.pipe(llm.withStructuredOutput(intentJsonSchema));
+
     return chain
       .invoke({
         billDetail,
@@ -50,5 +60,41 @@ module.exports = {
         console.error(error);
         return error;
       });
+  },
+
+  interpretUserMessage(message) {
+    const chatTemplate = ChatPromptTemplate.fromMessages([
+      ["user", "{message}"],
+      [
+        "user",
+        "try to understand the user request, the main goal is to figure out if user is providing a bill detail about his latest shop, and return the intent based on the given schema",
+      ],
+      ["system", "JSON result is:"],
+    ]);
+
+    const intentSchemaObject = z.object({
+      intent: z.enum(["general", "add-bill"]),
+      general: z.string({
+        description:
+          "A general response to the user message, with the same language of message",
+      }),
+    });
+
+    const intentJsonSchema = zodToJsonSchema(intentSchemaObject);
+
+    // const chain = new LLMChain({ llm, prompt: chatTemplate });
+    const chain = chatTemplate.pipe(llm.withStructuredOutput(intentJsonSchema));
+
+    return (
+      chain
+        .invoke({ message })
+        // .then((res) => {
+        //   return extractJSON(res);
+        // })
+        .catch((error) => {
+          console.error(error);
+          return error;
+        })
+    );
   },
 };
