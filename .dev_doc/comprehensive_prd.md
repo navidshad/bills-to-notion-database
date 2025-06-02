@@ -34,6 +34,7 @@ Create a smart, conversational personal finance assistant that:
 - **Accounts**: Bank accounts, credit cards, cash, etc.
 - **Config**: System settings and user preferences
 - **Dashboard**: Summary metrics and insights
+- **TempBills**: Temporary storage for unconfirmed transactions [MessageID, ProcessedData, Timestamp]
 
 #### 1.2 Data Schema
 ```
@@ -80,6 +81,7 @@ Bills_{YEAR} Columns:
 Enhanced Bill Schema:
 {
   id: string,
+  message_id: string,              // Telegram message ID for session management
   title: string,
   amount: number,
   currency_code: string,
@@ -117,6 +119,7 @@ Message Processing Flow:
 └─────────────────────────────────────┘
                  ↓
 ┌─────────────────────────────────────┐
+│ Bill ID: msg_12345 📋 Copy ID       │
 │ ✏️ Edit Details                     │
 │ 📂 Category: Food  🔧 Change        │
 │ 💰 Type: Expense   🔄 Switch        │
@@ -192,10 +195,12 @@ Config Structure:
 ### Core User Stories
 
 #### US1: Bill Processing
-**As a user**, I want to send a photo of my receipt and have it automatically processed and categorized, **so that** I can quickly log my expenses without manual data entry.
+**As a user**, I want to use `/add` command followed by a photo or text to add a transaction, **so that** I can explicitly log my expenses without accidental processing.
 
 **Acceptance Criteria:**
-- Photo uploads are processed within 10 seconds
+- `/add` command followed by photo processes the receipt
+- `/add` command followed by text processes the bill description
+- `/add` with photo + caption uses both for enhanced processing
 - AI extracts amount, date, merchant, and suggests category
 - User can review and modify before submission
 - Data is saved to appropriate yearly Google Sheet
@@ -209,12 +214,12 @@ Config Structure:
 - Categories are saved to Google Sheets Categories tab
 
 #### US3: Multi-format Input
-**As a user**, I want to input bills via text, photo, or photo with caption, **so that** I have flexibility in how I log my expenses.
+**As a user**, I want to input bills via `/add` command with various formats, **so that** I have flexibility in how I log my expenses.
 
 **Acceptance Criteria:**
-- Text input: "Spent $15 on lunch at McDonald's"
-- Photo input: Receipt image processing
-- Photo + caption: Enhanced context for AI processing
+- `/add` + text: "/add Spent $15 on lunch at McDonald's"
+- `/add` + photo: Upload receipt after /add command
+- `/add` + photo + caption: Enhanced context for AI processing
 - All formats produce consistent data structure
 
 #### US4: Edit and Correct
@@ -256,7 +261,27 @@ Config Structure:
 - Both source and destination transactions are recorded
 - Supports text input like "Exchange $100 USD to EUR in cash"
 
-#### US8: Recurring Transaction Detection
+#### US8: Sheet Initialization
+**As a user**, I want to use `/init` command to set up a new Google Sheets workbook, **so that** I can quickly configure my personal finance tracking system.
+
+**Acceptance Criteria:**
+- `/init` command creates a new Google Sheets workbook
+- Sets up required sheets: Config, Categories, Accounts, Bills_2024, Dashboard
+- Populates default categories and accounts
+- Provides the user with the Spreadsheet ID to configure
+- Guides user through basic setup process
+
+#### US9: Session Management
+**As a user**, I want to reference and modify specific bills using their message ID, **so that** I can edit transactions later without losing context.
+
+**Acceptance Criteria:**
+- Each processed bill shows a unique message ID and "Copy ID" button
+- User can provide bill ID to edit: "Edit bill msg_12345"
+- Unconfirmed bills are stored in TempBills sheet temporarily
+- Bills are removed from TempBills when submitted or cancelled
+- User can list pending bills: "Show pending bills"
+
+#### US10: Recurring Transaction Detection
 **As a user**, I want the system to detect recurring transactions, **so that** I can automate regular expense logging.
 
 **Acceptance Criteria:**
@@ -333,12 +358,18 @@ Config Structure:
 - [ ] Install googleapis dependency
 - [ ] Create Google Sheets adapter class (src/adapters/google-sheets.js)
 - [ ] Set up service account authentication
-- [ ] Create initial spreadsheet with sheets: Config, Categories, Accounts, Bills_2024
-- [ ] Implement basic addTransaction() method
+- [ ] Implement `/init` command handler in index.js
+- [ ] Create initializeSpreadsheet() method that creates: Config, Categories, Accounts, Bills_2024, Dashboard, TempBills sheets
+- [ ] Populate default categories (Food, Transport, Shopping, Bills, etc.)
+- [ ] Populate default accounts (Cash, Card, Bank)
+- [ ] Implement addTempBill() and addTransaction() methods
+- [ ] Implement session management with message IDs
 - [ ] Update package.json with new dependencies
 - [ ] Test connection and basic data insertion
 
 ### Phase 2: Enhanced Data Structure & Schema
+- [ ] Implement `/add` command handler in index.js
+- [ ] Update message processing to only process bills after `/add` command
 - [ ] Update text-chain.js with enhanced bill schema (including transfer fields)
 - [ ] Implement yearly sheet auto-creation logic
 - [ ] Create category management methods (getCategories, addCategory)
@@ -347,12 +378,14 @@ Config Structure:
 - [ ] Add transfer transaction support
 
 ### Phase 3: Enhanced Telegram Interface
-- [ ] Create src/keyboards/bill-keyboard.js for dynamic keyboards
+- [ ] Create src/keyboards/bill-keyboard.js for dynamic keyboards with Copy ID button
 - [ ] Update callback handlers for new keyboard options
 - [ ] Implement edit functionality in src/handlers/edit-handler.js
+- [ ] Add message ID-based bill editing: "Edit bill msg_12345"
 - [ ] Add transfer/exchange keyboard flows
 - [ ] Update message processing to handle transfers and exchanges
 - [ ] Add validation for transfer transactions
+- [ ] Implement "Show pending bills" command
 
 ### Phase 4: AI Processing Improvements
 - [ ] Update vision-chain.js to use photo captions
@@ -378,10 +411,58 @@ Config Structure:
 - **Backup Strategy**: Log all transactions locally before sending to sheets
 
 ### Critical Files to Modify
-- `index.js` - Main bot logic, replace notion-adapter with google-sheets
+- `index.js` - Main bot logic, replace notion-adapter with google-sheets, add `/init` and `/add` commands
 - `text-chain.js` - Update schema and add transfer support
 - `vision-chain.js` - Enhance with caption processing
 - `package.json` - Add googleapis dependency
+
+### Available Commands
+- `/init` - Set up new Google Sheets workbook
+- `/add` - Add new transaction (followed by photo/text)
+- `/add [description]` - Add transaction with text description
+- `Edit bill [id]` - Edit specific bill by message ID
+- `Show pending bills` - List unconfirmed transactions
+
+### Transaction Commands Flow
+```
+User: /add
+Bot: 📸 Send me a photo of your receipt or describe your expense
+
+User: [Sends receipt photo]
+Bot: [Shows processed JSON with keyboard]
+     ┌─────────────────────────────────────┐
+     │ Bill ID: msg_12345 📋 Copy ID       │
+     │ Amount: $25.50 | Category: Food     │
+     │ ✏️ Edit   📂 Change   ✅ Submit      │
+     └─────────────────────────────────────┘
+
+User: /add Spent $15 on coffee
+Bot: [Shows processed data with keyboard]
+
+User: Edit bill msg_12345
+Bot: Found bill msg_12345. What would you like to edit?
+     Current: $25.50 Food expense from Card
+
+User: Change category to Transport
+Bot: ✅ Updated bill msg_12345 category to Transport
+     [Shows updated keyboard]
+```
+
+### `/init` Command Flow
+```
+User: /init
+Bot: 🔧 Setting up your personal finance tracker...
+     ✅ Created Google Sheets workbook
+     ✅ Set up Config, Categories, Accounts, Bills_2024, Dashboard, TempBills sheets
+     ✅ Added default categories and accounts
+     
+     📋 Your Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+     
+     Please:
+     1. Save this ID in your .env file as GOOGLE_SPREADSHEET_ID
+     2. Share the sheet with your bot's service account
+     3. Start sending bills! 📸💰
+```
 
 ## Future Considerations
 
