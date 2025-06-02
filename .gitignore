@@ -1,3 +1,16 @@
 .env
 node_modules
 .DS_Store
+
+# Google Service Account credentials
+service-account.json
+service-account-*.json
+*.json
+
+# Logs
+logs/
+*.log
+
+# IDE files
+.vscode/
+.idea/

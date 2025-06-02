@@ -1,7 +1,7 @@
 const TelegramBot = require("node-telegram-bot-api");
 const textChain = require("./text-chain");
 const visionChain = require("./vision-chain");
-const notionAdapter = require("./notion-adapter");
+const googleSheetsAdapter = require("./src/adapters/google-sheets");
 
 // replace the value below with the Telegram token you receive from @BotFather
 const token = process.env.BOT_TOKEN || "";
@@ -30,11 +30,86 @@ const reply_markup = {
   ],
 };
 
+// Handle /init command
+bot.onText(/\/init/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  try {
+    bot.sendMessage(
+      chatId,
+      "🔧 Initializing your personal finance tracker sheets...\nThis may take a moment..."
+    );
+
+    const result = await googleSheetsAdapter.initializeSheets();
+
+    const sheetsCreatedText =
+      result.sheetsCreated.length > 0
+        ? `\n**Sheets Created:** ${result.sheetsCreated.join(", ")}`
+        : "\n**All required sheets already exist**";
+
+    const setupMessage = `✅ Successfully initialized your personal finance tracker!
+
+📋 **Your Spreadsheet ID:** \`${result.spreadsheetId}\`
+
+🔗 **Spreadsheet URL:** ${result.url}${sheetsCreatedText}
+
+**Required Sheets:**
+✅ Bills_${new Date().getFullYear()} - Your transactions for this year
+✅ Categories - Expense categories  
+✅ Accounts - Your payment accounts
+✅ Config - System configuration
+✅ TempBills - Temporary storage for processing
+
+🎉 You're ready to start tracking your expenses! Send me a photo of your receipt or describe an expense to get started.`;
+
+    bot.sendMessage(chatId, setupMessage, { parse_mode: "Markdown" });
+  } catch (error) {
+    console.error("Error in /init command:", error);
+    bot.sendMessage(
+      chatId,
+      `❌ Error initializing sheets: ${error.message}\n\nPlease check your Google Sheets configuration and GOOGLE_SPREADSHEET_ID environment variable.`
+    );
+  }
+});
+
+// Handle /help command
+bot.onText(/\/help/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  const helpMessage = `🤖 **Personal Finance Bot Help**
+
+**Commands:**
+• \`/init\` - Set up a new Google Sheets workbook for tracking
+• \`/help\` - Show this help message
+
+**How to use:**
+1. Send a photo of your receipt/bill
+2. Or type a description of your expense
+3. Review the processed information  
+4. Click "Add to Database" to save it
+
+**Examples:**
+• Send a photo of a restaurant receipt
+• Type: "Spent $15 on lunch at McDonald's"
+
+The bot will automatically extract amount, date, and merchant information from your input.`;
+
+  bot.sendMessage(chatId, helpMessage, { parse_mode: "Markdown" });
+});
+
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
 
+  // Skip if it's a command (starts with /)
+  if (msg.text && msg.text.startsWith("/")) {
+    return;
+  }
+
   if (!msg.photo && !msg.text) {
-    bot.sendMessage(chatId, "Please send a photo/text about your bill");
+    bot.sendMessage(
+      chatId,
+      "Please send a photo/text about your bill or use /help for commands"
+    );
     return;
   }
 
@@ -99,7 +174,10 @@ bot.on("message", async (msg) => {
     }
     //
     else {
-      bot.sendMessage(chatId, "cant understand your intent");
+      bot.sendMessage(
+        chatId,
+        "Can't understand your intent. Use /help for guidance."
+      );
       bot.deleteMessage(chatId, previewMessage.message_id);
       return;
     }
@@ -175,7 +253,7 @@ bot.on("callback_query", async (query) => {
     const { title, total_price, currency_code, date, description } = billRecord;
 
     try {
-      await notionAdapter.addItem(
+      await googleSheetsAdapter.addItem(
         title,
         total_price,
         currency_code,
@@ -183,15 +261,18 @@ bot.on("callback_query", async (query) => {
         description
       );
 
-      const caption = stringData + "\n\nAdded to database";
+      const caption = stringData + "\n\n✅ Added to Google Sheets database";
       editTextMessage({
         newText: caption,
         message: query.message,
       });
     } catch (error) {
+      console.error("Error adding to Google Sheets:", error);
       bot.sendMessage(
         query.message.chat.id,
-        "Error adding to database\n" + error
+        "❌ Error adding to database:\n" +
+          error.message +
+          "\n\nMake sure your Google Sheets is properly configured."
       );
 
       editTextMessage({

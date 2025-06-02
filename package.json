@@ -10,7 +10,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@notionhq/client": "^2.2.15",
+    "googleapis": "^134.0.0",
     "langchain": "^0.3.11",
     "node-telegram-bot-api": "^0.66.0",
     "zod-to-json-schema": "^3.24.1"
