@@ -353,54 +353,66 @@ Config Structure:
 ```
 
 ## Implementation Phases
+*Each phase delivers a working, deployable version*
 
-### Phase 1: Google Sheets API Setup & Basic Migration
-- [ ] Install googleapis dependency
+### Phase 1: Basic Google Sheets Migration (Working Bot)
+**Deliverable**: Functional bot that saves bills to Google Sheets instead of Notion
+
+- [ ] Install googleapis dependency (`npm install googleapis`)
 - [ ] Create Google Sheets adapter class (src/adapters/google-sheets.js)
 - [ ] Set up service account authentication
-- [ ] Implement `/init` command handler in index.js
-- [ ] Create initializeSpreadsheet() method that creates: Config, Categories, Accounts, Bills_2024, Dashboard, TempBills sheets
-- [ ] Populate default categories (Food, Transport, Shopping, Bills, etc.)
-- [ ] Populate default accounts (Cash, Card, Bank)
-- [ ] Implement addTempBill() and addTransaction() methods
-- [ ] Implement session management with message IDs
-- [ ] Update package.json with new dependencies
-- [ ] Test connection and basic data insertion
+- [ ] Implement `/init` command - creates basic spreadsheet with Bills_2024 sheet
+- [ ] Replace notion-adapter with google-sheets in index.js
+- [ ] Keep existing photo/text processing logic but save to Google Sheets
+- [ ] Test: User can send photo/text → bot processes → saves to Google Sheets
+- [ ] **Working Version**: Bot processes bills and saves to Google Sheets
 
-### Phase 2: Enhanced Data Structure & Schema
-- [ ] Implement `/add` command handler in index.js
-- [ ] Update message processing to only process bills after `/add` command
-- [ ] Update text-chain.js with enhanced bill schema (including transfer fields)
-- [ ] Implement yearly sheet auto-creation logic
-- [ ] Create category management methods (getCategories, addCategory)
-- [ ] Create account management methods (getAccounts, addAccount)
-- [ ] Update main index.js to use Google Sheets adapter instead of Notion
-- [ ] Add transfer transaction support
+### Phase 2: Command Structure & Enhanced UI (Improved UX)
+**Deliverable**: Bot with proper commands and better keyboards
 
-### Phase 3: Enhanced Telegram Interface
-- [ ] Create src/keyboards/bill-keyboard.js for dynamic keyboards with Copy ID button
-- [ ] Update callback handlers for new keyboard options
-- [ ] Implement edit functionality in src/handlers/edit-handler.js
-- [ ] Add message ID-based bill editing: "Edit bill msg_12345"
-- [ ] Add transfer/exchange keyboard flows
-- [ ] Update message processing to handle transfers and exchanges
-- [ ] Add validation for transfer transactions
-- [ ] Implement "Show pending bills" command
+- [ ] Implement `/add` command handler
+- [ ] Update message processing to only work after `/add` command
+- [ ] Enhance keyboard with better layout and options
+- [ ] Update text-chain.js with enhanced bill schema
+- [ ] Create Categories and Accounts sheets in `/init`
+- [ ] Implement category/account selection in keyboards
+- [ ] Test: `/add` + photo/text → enhanced keyboard → save to sheets
+- [ ] **Working Version**: Command-based bot with better UX
 
-### Phase 4: AI Processing Improvements
-- [ ] Update vision-chain.js to use photo captions
-- [ ] Enhance text-chain.js to suggest categories from Google Sheets
-- [ ] Add confidence scoring to AI responses
-- [ ] Implement transfer/exchange detection in AI processing
-- [ ] Add natural language processing for "Transfer $50 from card to cash"
+### Phase 3: Session Management & Editing (Full CRUD)
+**Deliverable**: Users can edit bills using message IDs
 
-### Phase 5: Configuration & Finalization
-- [ ] Create src/utils/config.js for configuration management
-- [ ] Set up environment variables for Google Sheets
+- [ ] Add TempBills sheet to store unconfirmed transactions
+- [ ] Implement message ID tracking in bill schema
+- [ ] Add "Copy ID" button to keyboards
+- [ ] Implement edit functionality: "Edit bill msg_12345"
+- [ ] Add "Show pending bills" command
+- [ ] Implement submit/cancel functionality from TempBills
+- [ ] Test: Create bill → edit by ID → submit → moves to Bills_2024
+- [ ] **Working Version**: Full CRUD operations on bills
+
+### Phase 4: Transfer & Exchange Features (Financial Features)
+**Deliverable**: Complete personal finance functionality
+
+- [ ] Add transfer transaction type support
+- [ ] Implement account-to-account transfers
+- [ ] Add currency exchange functionality
+- [ ] Update keyboards for transfer/exchange flows
+- [ ] Add transfer validation logic
+- [ ] Test: Create transfers between accounts and currency exchanges
+- [ ] **Working Version**: Complete personal finance app
+
+### Phase 5: Polish & Advanced Features (Production Ready)
+**Deliverable**: Production-ready bot with advanced features
+
+- [ ] Add Dashboard sheet with summary formulas
+- [ ] Implement yearly sheet auto-creation
+- [ ] Add photo caption processing enhancement
+- [ ] Implement confidence scoring
 - [ ] Add error handling and retry logic
-- [ ] Create initial Dashboard sheet with basic formulas
-- [ ] Remove old Notion dependencies
-- [ ] Final testing of all transaction types
+- [ ] Create comprehensive documentation
+- [ ] Remove all Notion dependencies
+- [ ] **Working Version**: Production-ready personal finance bot
 
 ## Technical Implementation Notes
 
