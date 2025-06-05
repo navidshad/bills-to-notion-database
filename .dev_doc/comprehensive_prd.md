@@ -2,19 +2,20 @@
 
 ## Executive Summary
 
-Transform the existing Telegram bill collector bot from a simple Notion-based data entry tool into a comprehensive personal finance application using Google Sheets as the backend. The system will provide intelligent bill processing, categorization, and financial tracking capabilities.
+Transform the existing Telegram bill collector bot from a simple Notion-based data entry tool into a comprehensive personal finance application using Google Sheets as the backend. The system will provide intelligent bill processing, categorization, financial tracking, and personal debt/credit management capabilities.
 
 ## Current State Analysis
 
 ### Existing Implementation
-- **Technology Stack**: Node.js, Telegram Bot API, OpenAI GPT-4o, Notion API
-- **Features**: Photo/text bill processing, AI-powered data extraction, basic Notion integration
-- **Limitations**: Single database, no categorization, no financial insights, limited user interaction
+- **Technology Stack**: Node.js + TypeScript, Telegram Bot API, OpenAI GPT-4o, Google Sheets API
+- **Features**: Photo/text bill processing, AI-powered data extraction, Google Sheets integration
+- **Limitations**: No categorization, no financial insights, limited user interaction, no debt tracking
 
 ### Migration Goals
-- **Primary**: Replace Notion with Google Sheets API
+- **Primary**: Replace Notion with Google Sheets API ✅ COMPLETED
 - **Secondary**: Add comprehensive financial features
 - **Tertiary**: Improve user experience and data management
+- **New**: Add personal debt and credit tracking
 
 ## Product Vision
 
@@ -22,6 +23,7 @@ Create a smart, conversational personal finance assistant that:
 - Automatically processes and categorizes bills/receipts
 - Organizes financial data in structured Google Sheets
 - Provides insights and maintains financial records
+- Tracks personal loans and debts with friends/family
 - Adapts to user preferences and spending patterns
 
 ## Core Requirements
@@ -35,27 +37,85 @@ Create a smart, conversational personal finance assistant that:
 - **Config**: System settings and user preferences
 - **Dashboard**: Summary metrics and insights
 - **TempBills**: Temporary storage for unconfirmed transactions [MessageID, ProcessedData, Timestamp]
+- **Contacts**: People you lend to/borrow from (NEW)
+- **Debts**: Active debt/credit tracking (NEW)
+- **DebtHistory**: Payment history for debts/credits (NEW)
 
 #### 1.2 Data Schema
+
+**Bills_{YEAR} Columns:**
+```typescript
+interface BillRecord {
+  id: string;                    // Auto-generated
+  date: string;                  // ISO date
+  title: string;                 // Description
+  amount: number;                // Transaction amount
+  currency: string;              // Currency code
+  category: string;              // Expense category
+  transaction_type: "expense" | "income" | "transfer" | "lend" | "borrow" | "debt_payment" | "debt_received";
+  account: string;               // Source account
+  destination_account?: string;  // For transfers
+  destination_amount?: number;   // For currency exchanges
+  destination_currency?: string; // For currency exchanges
+  exchange_rate?: number;        // For currency exchanges
+  payment_method?: string;       // How payment was made
+  contact_id?: string;           // For debt transactions (references Contacts)
+  contact_name?: string;         // Person's name for easy reading
+  related_debt_id?: string;      // Links to active debt in Debts sheet
+  debt_type?: "LENT" | "BORROWED"; // Type of debt relationship
+  tags?: string;                 // Comma-separated tags
+  notes?: string;                // Additional notes
+  created_at: string;            // Creation timestamp
+  updated_at: string;            // Last update timestamp
+}
 ```
-Bills_{YEAR} Columns:
-- ID (Auto-generated)
-- Date
-- Title/Description
-- Amount
-- Currency
-- Category
-- Transaction Type (Expense/Income/Transfer)
-- Account
-- Destination Account (for transfers)
-- Destination Amount (for currency exchanges)
-- Destination Currency (for currency exchanges)
-- Exchange Rate (for currency exchanges)
-- Payment Method
-- Tags
-- Notes
-- Created At
-- Updated At
+
+**Contacts Sheet Columns:**
+```typescript
+interface Contact {
+  contact_id: string;            // Auto-generated
+  name: string;                  // Person's name
+  phone?: string;                // Optional phone number
+  relationship?: string;         // Friend, Family, Colleague, etc.
+  notes?: string;                // Additional info
+  created_at: string;            // Creation timestamp
+  updated_at: string;            // Last update timestamp
+}
+```
+
+**Debts Sheet Columns:**
+```typescript
+interface Debt {
+  debt_id: string;               // Auto-generated
+  contact_id: string;            // References Contacts sheet
+  contact_name: string;          // For easy reading
+  type: "LENT" | "BORROWED";     // Money lent or borrowed
+  original_amount: number;       // Original debt amount
+  currency: string;              // Currency code
+  current_balance: number;       // Remaining amount owed
+  interest_rate?: number;        // Optional interest rate (default 0%)
+  date_created: string;          // When debt was created
+  due_date?: string;             // Optional due date
+  description: string;           // Reason for debt
+  status: "ACTIVE" | "PAID" | "CANCELLED"; // Current status
+  created_at: string;            // Creation timestamp
+  updated_at: string;            // Last update timestamp
+}
+```
+
+**DebtHistory Sheet Columns:**
+```typescript
+interface DebtPayment {
+  payment_id: string;            // Auto-generated
+  debt_id: string;               // References Debts sheet
+  contact_name: string;          // Person's name
+  payment_amount: number;        // Amount paid
+  payment_date: string;          // When payment was made
+  payment_method?: string;       // How payment was made
+  notes?: string;                // Payment notes
+  new_balance: number;           // Balance after this payment
+  created_at: string;            // Creation timestamp
+}
 ```
 
 #### 1.3 Configuration Management
@@ -70,76 +130,58 @@ Bills_{YEAR} Columns:
 - **Image Processing**: Receipt/bill photo analysis
 - **Text Processing**: Natural language bill descriptions
 - **Caption Integration**: Use photo captions in analysis process
+- **Debt Detection**: Recognize lending/borrowing language patterns
 
 #### 2.2 Smart Categorization
 - **Dynamic Categories**: Load from Google Sheets Categories tab
 - **AI Suggestions**: Propose categories based on merchant/description
 - **Fallback Handling**: "Other" category with user review prompt
+- **Debt Classification**: Automatically detect and categorize debt transactions
 
 #### 2.3 Enhanced Data Extraction
-```javascript
-Enhanced Bill Schema:
-{
-  id: string,
-  message_id: string,              // Telegram message ID for session management
-  title: string,
-  amount: number,
-  currency_code: string,
-  date: ISO8601,
-  category: string,
-  transaction_type: "expense" | "income" | "transfer",
-  account: string,
+```typescript
+interface EnhancedBillSchema {
+  id: string;
+  message_id: string;              // Telegram message ID for session management
+  title: string;
+  amount: number;
+  currency_code: string;
+  date: string;                    // ISO8601
+  category: string;
+  transaction_type: "expense" | "income" | "transfer" | "lend" | "borrow" | "debt_payment" | "debt_received";
+  account: string;
   // Transfer/Exchange specific fields
-  destination_account: string?,     // For transfers
-  destination_amount: number?,      // For currency exchanges
-  destination_currency: string?,    // For currency exchanges
-  exchange_rate: number?,           // For currency exchanges
+  destination_account?: string;    // For transfers
+  destination_amount?: number;     // For currency exchanges
+  destination_currency?: string;   // For currency exchanges
+  exchange_rate?: number;          // For currency exchanges
+  // Debt-related fields (NEW)
+  contact_id?: string;            // Links to Contacts sheet
+  contact_name?: string;          // Person's name for easy reading
+  related_debt_id?: string;       // Links to active debt in Debts sheet
+  debt_type?: "LENT" | "BORROWED"; // Type of debt relationship
   // General fields
-  payment_method: string?,
-  merchant: string?,
-  location: string?,
-  tags: string[],
-  confidence_score: number,
-  description: string,
-  original_text: string?
+  payment_method?: string;
+  merchant?: string;
+  location?: string;
+  tags: string[];
+  confidence_score: number;
+  description: string;
+  original_text?: string;
 }
 ```
 
-### 3. Advanced User Interface
-
-#### 3.1 Enhanced Inline Keyboard
+#### 2.4 Debt Detection Patterns
+The AI will recognize these natural language patterns:
+```typescript
+const debtPatterns = [
+  /lent?\s+\$?(\d+(?:\.\d{2})?)\s+to\s+([A-Za-z\s]+)/i,           // "Lent $50 to John"
+  /borrowed?\s+\$?(\d+(?:\.\d{2})?)\s+from\s+([A-Za-z\s]+)/i,     // "Borrowed $200 from Mom"
+  /([A-Za-z\s]+)\s+paid\s+me\s+back\s+\$?(\d+(?:\.\d{2})?)/i,     // "John paid me back $25"
+  /paid\s+([A-Za-z\s]+)\s+back\s+\$?(\d+(?:\.\d{2})?)/i,          // "Paid Mom back $100"
+  /([A-Za-z\s]+)\s+owes?\s+me\s+\$?(\d+(?:\.\d{2})?)/i            // "Sarah owes me $30"
+];
 ```
-Message Processing Flow:
-┌─────────────────────────────────────┐
-│ [User sends bill photo/text]        │
-└─────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────┐
-│ Bot shows processed JSON + keyboard │
-└─────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────┐
-│ Bill ID: msg_12345 📋 Copy ID       │
-│ ✏️ Edit Details                     │
-│ 📂 Category: Food  🔧 Change        │
-│ 💰 Type: Expense   🔄 Switch        │
-│ 💳 Account: Card   🏦 Change        │
-│ 🔄 To Account: --- 🏦 Set (if transfer) │
-│ 🏷️ Add Tags       📝 Add Notes      │
-│ ❌ Cancel         ✅ Submit         │
-└─────────────────────────────────────┘
-```
-
-#### 3.2 Edit Functionality
-- **Inline Editing**: Quick category/type/account changes
-- **Detailed Editing**: Full JSON modification support
-- **Natural Language**: "Change category to groceries" support
-- **Validation**: Real-time data validation and error handling
-
-#### 3.3 Batch Operations
-- **Multi-select**: Process multiple bills in sequence
-- **Bulk Actions**: Apply same category to multiple items
-- **Review Queue**: Review uncertain AI classifications
 
 ### 4. Financial Features
 
@@ -148,6 +190,7 @@ Message Processing Flow:
 - **Currency Handling**: Multi-currency support with conversion
 - **Recurring Transactions**: Detect and manage recurring bills
 - **Split Transactions**: Divide bills across categories
+- **Debt Transactions**: Track lending and borrowing (NEW)
 
 #### 4.2 Categories & Tags
 - **Custom Categories**: User-defined categories for organization
@@ -159,29 +202,40 @@ Message Processing Flow:
 - **Balance Tracking**: Optional balance maintenance
 - **Transfer Handling**: Inter-account transfer support
 
+#### 4.4 Debt & Credit Management (NEW)
+- **Personal Lending**: Track money lent to friends/family
+- **Borrowing**: Track money borrowed from others
+- **Payment Tracking**: Record payments and update balances
+- **Contact Management**: Maintain lending relationship records
+- **Interest Calculation**: Optional interest rate support
+- **Payment History**: Complete audit trail of all debt payments
+
 ### 5. Configuration System
 
 #### 5.1 System Configuration
-```javascript
-Config Structure:
-{
+```typescript
+interface Config {
   user_preferences: {
-    default_currency: "USD",
-    default_account: "Main Card",
-    default_category: "Other",
-    timezone: "UTC",
-    date_format: "YYYY-MM-DD"
-  },
+    default_currency: string;      // "USD"
+    default_account: string;       // "Main Card"
+    default_category: string;      // "Other"
+    timezone: string;              // "UTC"
+    date_format: string;           // "YYYY-MM-DD"
+  };
   google_sheets: {
-    spreadsheet_id: "...",
-    service_account_path: "...",
-    auto_create_yearly_sheets: true,
-    backup_enabled: true
-  },
+    spreadsheet_id: string;
+    service_account_path: string;
+    auto_create_yearly_sheets: boolean;
+    backup_enabled: boolean;
+  };
   ai_settings: {
-    confidence_threshold: 0.8,
-    auto_submit_high_confidence: false
-  }
+    confidence_threshold: number;   // 0.8
+    auto_submit_high_confidence: boolean;
+  };
+  debt_settings: {
+    default_interest_rate: number; // 0% (NEW)
+    payment_reminders: boolean;    // false (NEW)
+  };
 }
 ```
 
@@ -189,6 +243,7 @@ Config Structure:
 - **Personal Categories**: User-specific category management
 - **Spending Limits**: Optional budget tracking
 - **Notification Preferences**: Spending alerts and summaries
+- **Debt Preferences**: Interest rates, payment reminders (NEW)
 
 ## User Stories
 
@@ -266,7 +321,7 @@ Config Structure:
 
 **Acceptance Criteria:**
 - `/init` command creates a new Google Sheets workbook
-- Sets up required sheets: Config, Categories, Accounts, Bills_2024, Dashboard
+- Sets up required sheets: Config, Categories, Accounts, Bills_2024, Dashboard, TempBills, Contacts, Debts, DebtHistory
 - Populates default categories and accounts
 - Provides the user with the Spreadsheet ID to configure
 - Guides user through basic setup process
@@ -289,6 +344,62 @@ Config Structure:
 - Suggests automatic categorization for recurring items
 - Optional auto-submission for high-confidence recurring transactions
 
+### Debt & Credit User Stories (NEW)
+
+#### US11: Lending Money
+**As a user**, I want to record when I lend money to someone, **so that** I can track who owes me money and manage my credits.
+
+**Acceptance Criteria:**
+- Can use `/lend` command or natural language: "Lent $50 to John"
+- AI detects lending transactions automatically from text
+- Creates contact record if person doesn't exist
+- Records debt in Debts sheet with LENT type
+- Shows summary and confirmation before saving
+- Updates person's total debt balance
+
+#### US12: Borrowing Money
+**As a user**, I want to record when I borrow money from someone, **so that** I can track what I owe and manage repayments.
+
+**Acceptance Criteria:**
+- Can use `/borrow` command or natural language: "Borrowed $200 from Mom"
+- AI detects borrowing transactions automatically from text
+- Creates contact record if person doesn't exist
+- Records debt in Debts sheet with BORROWED type
+- Shows summary and confirmation before saving
+- Tracks due dates and interest if applicable
+
+#### US13: Debt Payments
+**As a user**, I want to record when someone pays me back or when I pay someone back, **so that** I can track debt balances and payment history.
+
+**Acceptance Criteria:**
+- Can use `/pay` command or natural language: "John paid me back $50"
+- Shows list of active debts for quick selection
+- Updates debt balance automatically in Debts sheet
+- Records payment history in DebtHistory sheet
+- Marks debt as PAID when balance reaches zero
+- Supports partial payments with remaining balance tracking
+
+#### US14: Debt Overview
+**As a user**, I want to see all my active debts and credits, **so that** I can understand my lending relationships and outstanding balances.
+
+**Acceptance Criteria:**
+- `/debts` command shows summary of all active debts
+- Separates money lent (credits) from money borrowed (debts)
+- Shows current balances and original amounts
+- Displays total amounts owed to you and by you
+- Provides quick actions for recording payments
+- Shows payment history for each debt
+
+#### US15: Contact Management
+**As a user**, I want to manage my lending contacts, **so that** I can maintain clean records of people I do financial business with.
+
+**Acceptance Criteria:**
+- `/contacts` command shows all lending contacts
+- Can add/edit contact information (name, phone, relationship)
+- Shows total debt/credit balance per contact
+- Can view complete lending history with each contact
+- Can add notes about lending relationships
+
 ## Technical Requirements
 
 ### 6.1 Dependencies
@@ -302,7 +413,10 @@ Config Structure:
     "zod": "^3.22.0",
     "zod-to-json-schema": "^3.24.1",
     "moment": "^2.29.4",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/node-telegram-bot-api": "^0.64.0"
   }
 }
 ```
@@ -311,7 +425,7 @@ Config Structure:
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Telegram Bot  │◄──►│   Main App       │◄──►│  Google Sheets  │
-│                 │    │   (index.js)     │    │   Adapter       │
+│                 │    │   (index.ts)     │    │   Adapter       │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │
                        ┌────────┴────────┐
@@ -320,28 +434,48 @@ Config Structure:
             │   AI Chains     │  │  Configuration  │
             │ (text/vision)   │  │   Manager       │
             └─────────────────┘  └─────────────────┘
+                                         │
+                              ┌─────────┴─────────┐
+                              ▼                   ▼
+                    ┌─────────────────┐  ┌─────────────────┐
+                    │  Debt Manager   │  │  Contact        │
+                    │   (NEW)         │  │  Manager (NEW)  │
+                    └─────────────────┘  └─────────────────┘
 ```
 
-### 6.3 File Structure (✅ IMPLEMENTED)
+### 6.3 File Structure (✅ IMPLEMENTED with TypeScript)
 ```
-├── index.js                     # Clean main entry point (23 lines!)
-├── text-chain.js               # Text processing AI chain
-├── vision-chain.js             # Image processing AI chain
 ├── src/
+│   ├── index.ts                     # Clean main entry point
+│   ├── text-chain.ts               # Text processing AI chain
+│   ├── vision-chain.ts             # Image processing AI chain
 │   ├── adapters/
-│   │   ├── google-sheets.js     # Google Sheets integration
-│   │   └── notion-adapter.js   # Legacy Notion (for migration)
+│   │   ├── google-sheets.ts         # Google Sheets integration
+│   │   └── notion-adapter.ts       # Legacy Notion (for migration)
 │   ├── events/
 │   │   ├── commands/
-│   │   │   ├── init-command.js  # /init command handler
-│   │   │   └── help-command.js  # /help command handler
-│   │   ├── message-handler.js   # Photo/text message processing
-│   │   └── callback-handler.js  # Inline keyboard interactions
+│   │   │   ├── init-command.ts      # /init command handler
+│   │   │   ├── help-command.ts      # /help command handler
+│   │   │   ├── lend-command.ts      # /lend command handler (NEW)
+│   │   │   ├── borrow-command.ts    # /borrow command handler (NEW)
+│   │   │   ├── pay-command.ts       # /pay command handler (NEW)
+│   │   │   ├── debts-command.ts     # /debts command handler (NEW)
+│   │   │   └── contacts-command.ts  # /contacts command handler (NEW)
+│   │   ├── message-handler.ts       # Photo/text message processing
+│   │   └── callback-handler.ts      # Inline keyboard interactions
+│   ├── managers/
+│   │   ├── debt-manager.ts          # Debt tracking logic (NEW)
+│   │   └── contact-manager.ts       # Contact management (NEW)
 │   ├── utils/
-│   │   ├── helpers.js          # editTextMessage + BILL_REPLY_MARKUP
-│   │   └── receipt-processor.js # getReceiptDetail function
+│   │   ├── helpers.ts              # editTextMessage + BILL_REPLY_MARKUP
+│   │   └── receipt-processor.ts    # getReceiptDetail function
+│   ├── types/
+│   │   ├── bill.types.ts           # Bill and transaction types
+│   │   ├── debt.types.ts           # Debt and contact types (NEW)
+│   │   └── config.types.ts         # Configuration types
 │   └── keyboards/
-│       └── (existing)          # For future enhanced keyboards
+│       ├── bill-keyboards.ts       # Bill processing keyboards
+│       └── debt-keyboards.ts       # Debt management keyboards (NEW)
 ├── config/ (planned)
 └── docs/ (planned)
 ```
@@ -353,25 +487,25 @@ Config Structure:
 **Deliverable**: Functional bot that saves bills to Google Sheets instead of Notion
 
 - [x] Install googleapis dependency (`npm install googleapis`)
-- [x] Create Google Sheets adapter class (src/adapters/google-sheets.js)
+- [x] Create Google Sheets adapter class (src/adapters/google-sheets.ts)
 - [x] Set up service account authentication
 - [x] Implement `/init` command - initializes required sheets in existing spreadsheet
-- [x] Replace notion-adapter with google-sheets in index.js
+- [x] Replace notion-adapter with google-sheets in index.ts
 - [x] Keep existing photo/text processing logic but save to Google Sheets
 - [x] Updated `/init` to work with existing spreadsheet ID instead of creating new one
 - [x] Created SETUP.md guide for Google Sheets configuration
 - [x] Updated .gitignore to exclude service account files
 - [x] Updated package.json dependencies (removed @notionhq/client, added googleapis)
-- [x] **REFACTORING COMPLETE**: Broke down monolithic index.js into modular structure ✅
+- [x] **REFACTORING COMPLETE**: Broke down monolithic index.js into modular TypeScript structure ✅
   - [x] Created `src/events/` directory with command and handler separation
   - [x] Created `src/utils/` for shared functionality (helpers, receipt-processor)
-  - [x] Modular command handlers: init-command.js, help-command.js
+  - [x] Modular command handlers: init-command.ts, help-command.ts
   - [x] Separated message and callback handling into dedicated files
-  - [x] Clean index.js entry point (23 lines) with proper imports
+  - [x] Clean index.ts entry point with proper imports
 - [x] **TESTING COMPLETE**: User can send photo/text → bot processes → saves to Google Sheets ✅
 - [x] **Working Version**: Bot processes bills and saves to Google Sheets ✅
 
-**Status**: ✅ **PHASE 1 COMPLETE** - Full Google Sheets migration + modular refactoring successful!
+**Status**: ✅ **PHASE 1 COMPLETE** - Full Google Sheets migration + modular TypeScript refactoring successful!
 
 ### Phase 2: Command Structure & Enhanced UI (Improved UX)
 **Deliverable**: Bot with proper commands and better keyboards
@@ -379,7 +513,7 @@ Config Structure:
 - [ ] Implement `/add` command handler
 - [ ] Update message processing to only work after `/add` command
 - [ ] Enhance keyboard with better layout and options
-- [ ] Update text-chain.js with enhanced bill schema
+- [ ] Update text-chain.ts with enhanced bill schema
 - [ ] Create Categories and Accounts sheets in `/init`
 - [ ] Implement category/account selection in keyboards
 - [ ] Test: `/add` + photo/text → enhanced keyboard → save to sheets
@@ -408,17 +542,39 @@ Config Structure:
 - [ ] Test: Create transfers between accounts and currency exchanges
 - [ ] **Working Version**: Complete personal finance app
 
-### Phase 5: Polish & Advanced Features (Production Ready)
+### Phase 5: Personal Debt & Credit Tracking (NEW)
+**Deliverable**: Complete debt management functionality
+
+- [ ] Add Contacts, Debts, DebtHistory sheets to `/init` command
+- [ ] Create debt-related TypeScript types (debt.types.ts)
+- [ ] Implement debt transaction types (lend, borrow, debt_payment, debt_received)
+- [ ] Create debt management commands:
+  - [ ] `/lend` - Record money lent to someone
+  - [ ] `/borrow` - Record money borrowed from someone
+  - [ ] `/pay` - Record debt payments (giving or receiving)
+  - [ ] `/debts` - Show debt overview and balances
+  - [ ] `/contacts` - Manage lending contacts
+- [ ] Update AI chains to detect debt language patterns
+- [ ] Create debt-manager.ts and contact-manager.ts
+- [ ] Add debt management keyboards and flows
+- [ ] Implement automatic debt balance updates
+- [ ] Add payment history tracking
+- [ ] Test: Lend money → record payments → track balances → debt overview
+- [ ] **Working Version**: Complete personal finance app with debt tracking
+
+### Phase 6: Polish & Advanced Features (Production Ready)
 **Deliverable**: Production-ready bot with advanced features
 
-- [ ] Add Dashboard sheet with summary formulas
+- [ ] Add Dashboard sheet with summary formulas (including debt summaries)
 - [ ] Implement yearly sheet auto-creation
 - [ ] Add photo caption processing enhancement
 - [ ] Implement confidence scoring
 - [ ] Add error handling and retry logic
 - [ ] Create comprehensive documentation
 - [ ] Remove all Notion dependencies
-- [ ] **Working Version**: Production-ready personal finance bot
+- [ ] Add debt payment reminders (optional)
+- [ ] Implement interest calculations for debts
+- [ ] **Working Version**: Production-ready personal finance bot with debt management
 
 ## Technical Implementation Notes
 
@@ -427,12 +583,14 @@ Config Structure:
 - **Error Handling**: Implement retry logic for API failures
 - **Data Validation**: Validate all inputs before Google Sheets insertion
 - **Backup Strategy**: Log all transactions locally before sending to sheets
+- **TypeScript**: Full type safety across the application
 
 ### Critical Files to Modify
-- `index.js` - Main bot logic, replace notion-adapter with google-sheets, add `/init` and `/add` commands
-- `text-chain.js` - Update schema and add transfer support
-- `vision-chain.js` - Enhance with caption processing
-- `package.json` - Add googleapis dependency
+- `src/index.ts` - Main bot logic, add debt-related commands
+- `src/text-chain.ts` - Update schema and add debt detection patterns
+- `src/vision-chain.ts` - Enhance with caption processing
+- `src/adapters/google-sheets.ts` - Add debt sheet management
+- `package.json` - Ensure TypeScript dependencies
 
 ### Available Commands
 - `/init` - Set up new Google Sheets workbook
@@ -440,6 +598,11 @@ Config Structure:
 - `/add [description]` - Add transaction with text description
 - `Edit bill [id]` - Edit specific bill by message ID
 - `Show pending bills` - List unconfirmed transactions
+- `/lend` - Record money lent to someone (NEW)
+- `/borrow` - Record money borrowed from someone (NEW)
+- `/pay` - Record debt payment (NEW)
+- `/debts` - Show debt overview (NEW)
+- `/contacts` - Manage lending contacts (NEW)
 
 ### Transaction Commands Flow
 ```
@@ -466,12 +629,52 @@ Bot: ✅ Updated bill msg_12345 category to Transport
      [Shows updated keyboard]
 ```
 
+### Debt Commands Flow (NEW)
+```
+User: /lend
+Bot: 💰 Who did you lend money to?
+
+User: John
+Bot: 💵 How much did you lend to John?
+
+User: $200
+Bot: 📅 When was this loan made? (or just send "today")
+
+User: today  
+Bot: 📝 What was this loan for? (optional)
+
+User: Emergency car repair
+Bot: 📋 Loan Summary:
+     👤 Contact: John
+     💵 Amount: $200.00 USD
+     📅 Date: 2024-01-15
+     📝 Purpose: Emergency car repair
+     
+     [✅ Save Loan] [✏️ Edit] [❌ Cancel]
+
+User: /debts
+Bot: 📊 Your Active Debts & Credits:
+
+     💰 MONEY LENT (Credits):
+     • John: $100 remaining (originally $200)
+     • Sarah: $50 remaining 
+     Total owed to you: $150
+     
+     💸 MONEY BORROWED (Debts):
+     • Mom: $300 remaining (originally $500)
+     • Credit Union: $1,200 remaining
+     Total you owe: $1,500
+     
+     [💰 Record Payment] [📋 Full History] [➕ New Debt/Credit]
+```
+
 ### `/init` Command Flow
 ```
 User: /init
 Bot: 🔧 Setting up your personal finance tracker...
      ✅ Created Google Sheets workbook
      ✅ Set up Config, Categories, Accounts, Bills_2024, Dashboard, TempBills sheets
+     ✅ Set up Contacts, Debts, DebtHistory sheets (NEW)
      ✅ Added default categories and accounts
      
      📋 Your Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
@@ -479,20 +682,23 @@ Bot: 🔧 Setting up your personal finance tracker...
      Please:
      1. Save this ID in your .env file as GOOGLE_SPREADSHEET_ID
      2. Share the sheet with your bot's service account
-     3. Start sending bills! 📸💰
+     3. Start sending bills and tracking debts! 📸💰
 ```
 
 ## Future Considerations
 
 ### Potential Enhancements
-- **G sheet Dashboard**: configured a new sheet in initial use
-- **Multi-user Support**: Family/team financial tracking
+- **Advanced Dashboard**: Debt summaries, payment schedules, interest calculations
+- **Multi-user Support**: Family/team financial tracking with shared debts
 - **Advanced Analytics**: Machine learning-powered financial insights
+- **Payment Reminders**: Automated debt payment notifications
+- **Interest Calculations**: Compound interest tracking for long-term debts
 
 ### Scalability Considerations
 - **Multi-tenant Architecture**: Support multiple users/organizations
 - **Database Migration**: Move from Google Sheets to dedicated database
 - **API Layer**: RESTful API for third-party integrations
 - **Microservices**: Break down into specialized services
+- **Mobile App**: Native mobile application for enhanced UX
 
 ---
