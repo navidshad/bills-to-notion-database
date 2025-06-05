@@ -1,25 +1,22 @@
-import { z } from "zod";
-import { LLMChain } from "langchain/chains";
 import { ChatOpenAI } from "@langchain/openai";
-import { PromptTemplate, ChatPromptTemplate } from "@langchain/core/prompts";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { extractJSON } from "./helpers";
 
-// const billRecordSchema = z.object({
-//   title: z.string(),
-//   total_price: z.number(),
-//   date: z.date(),
-//   description: z.string(),
-// });
-
-// const schema = zodToJsonSchema(billRecordSchema);
+import {
+  billRecordSchema,
+  userIntentSchema,
+  BillRecord,
+  UserIntent,
+} from "./types";
 
 const llm = new ChatOpenAI({
   modelName: "gpt-4o",
   openAIApiKey: process.env.OPENAI_API_KEY,
 });
 
-export const generateBillInfo = async (billDetail: string) => {
+export const generateBillInfo = async (
+  billDetail: string
+): Promise<BillRecord> => {
   const chatTemplate = ChatPromptTemplate.fromMessages([
     ["user", "Bill: {billDetail}"],
     [
@@ -32,20 +29,6 @@ export const generateBillInfo = async (billDetail: string) => {
     ],
     ["system", "JSON result is:"],
   ]);
-
-  const billRecordSchema = z.object({
-    title: z.string({
-      description:
-        "title of the bill, generated from the bill detail, don't write 'bill' or none sense words",
-    }),
-    total_price: z.number(),
-    currency_code: z.string({
-      description:
-        "if didn't provide, default is " + process.env.DEFAULT_CURRENCY,
-    }),
-    date: z.date({ description: "if not provided, use message date" }),
-    description: z.string(),
-  });
 
   const intentJsonSchema = zodToJsonSchema(billRecordSchema);
 
@@ -66,7 +49,7 @@ export const generateBillInfo = async (billDetail: string) => {
     });
 };
 
-export const interpretUserMessage = (message: string) => {
+export const interpretUserMessage = (message: string): Promise<UserIntent> => {
   const chatTemplate = ChatPromptTemplate.fromMessages([
     ["user", "{message}"],
     [
@@ -76,15 +59,7 @@ export const interpretUserMessage = (message: string) => {
     ["system", "JSON result is:"],
   ]);
 
-  const intentSchemaObject = z.object({
-    intent: z.enum(["general", "add-bill"]),
-    general: z.string({
-      description:
-        "A general response to the user message, with the same language of message",
-    }),
-  });
-
-  const intentJsonSchema = zodToJsonSchema(intentSchemaObject);
+  const intentJsonSchema = zodToJsonSchema(userIntentSchema);
 
   // const chain = new LLMChain({ llm, prompt: chatTemplate });
   const chain = chatTemplate.pipe(llm.withStructuredOutput(intentJsonSchema));

@@ -14,3 +14,6 @@ logs/
 # IDE files
 .vscode/
 .idea/
+
+# build
+dist
