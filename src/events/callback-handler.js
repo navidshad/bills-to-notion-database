@@ -2,8 +2,8 @@
  * Callback query handler for inline keyboard interactions
  */
 
-const textChain = require("../../text-chain");
-const googleSheetsAdapter = require("../../src/adapters/google-sheets");
+const textChain = require("../text-chain");
+const googleSheetsAdapter = require("../adapters/google-sheets");
 const { getReceiptDetail } = require("../utils/receipt-processor");
 const { editTextMessage, BILL_REPLY_MARKUP } = require("../utils/helpers");
 

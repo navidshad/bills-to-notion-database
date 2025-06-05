@@ -6,10 +6,10 @@
 const TelegramBot = require("node-telegram-bot-api");
 
 // Import event handlers
-const { registerInitCommand } = require("./src/events/commands/init-command");
-const { registerHelpCommand } = require("./src/events/commands/help-command");
-const { registerMessageHandler } = require("./src/events/message-handler");
-const { registerCallbackHandler } = require("./src/events/callback-handler");
+const { registerInitCommand } = require("./events/commands/init-command");
+const { registerHelpCommand } = require("./events/commands/help-command");
+const { registerMessageHandler } = require("./events/message-handler");
+const { registerCallbackHandler } = require("./events/callback-handler");
 
 // Replace the value below with the Telegram token you receive from @BotFather
 const token = process.env.BOT_TOKEN || "";

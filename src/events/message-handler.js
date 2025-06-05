@@ -2,7 +2,7 @@
  * Message handler for processing photos and text messages
  */
 
-const textChain = require("../../text-chain");
+const textChain = require("../text-chain");
 const { getReceiptDetail } = require("../utils/receipt-processor");
 const { BILL_REPLY_MARKUP } = require("../utils/helpers");
 

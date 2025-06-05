@@ -2,8 +2,8 @@
  * Receipt processing utilities
  */
 
-const textChain = require("../../text-chain");
-const visionChain = require("../../vision-chain");
+const textChain = require("../text-chain");
+const visionChain = require("../vision-chain");
 
 /**
  * Process receipt from image and caption
