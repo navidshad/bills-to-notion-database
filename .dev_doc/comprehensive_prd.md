@@ -124,21 +124,236 @@ interface DebtPayment {
 - **Auto-sheet Creation**: Create yearly sheets as needed
 - **Backup Strategy**: Regular data export capabilities
 
-### 2. Enhanced AI Processing
+### 2. User Interface & Keyboard Design
 
-#### 2.1 Multi-modal Analysis
+#### 2.1 Keyboard Hierarchy Structure
+
+The bot uses a dynamic inline keyboard system that adapts based on transaction type and user context:
+
+```
+📱 BILL PROCESSING KEYBOARDS
+│
+├── 🏠 PRIMARY KEYBOARDS (Transaction Type Based)
+│   ├── 💸 Expense Keyboard
+│   ├── 💰 Income Keyboard
+│   ├── 🔄 Transfer Keyboard
+│   ├── 🤝 Lend Keyboard
+│   ├── 🙏 Borrow Keyboard
+│   ├── 💳 Debt Payment Keyboard
+│   └── 💵 Debt Received Keyboard
+│
+├── ✏️ FIELD EDIT KEYBOARDS
+│   ├── 💰 Amount Edit
+│   ├── 📅 Date Edit
+│   ├── 🏷️ Transaction Type Selection
+│   ├── 📂 Category Selection
+│   ├── 💳 Account Selection
+│   ├── 👤 Contact Selection
+│   ├── 🔗 Debt Selection
+│   └── ✏️ Manual Text Edit
+│
+├── 🔧 ACTION KEYBOARDS
+│   ├── ✅ Confirmation
+│   ├── ❌ Error/Retry
+│   └── 📋 Summary/Review
+│
+└── 🔄 FLOW KEYBOARDS
+    ├── 🆕 New Category Creation
+    ├── 🆕 New Account Creation
+    ├── 🆕 New Contact Creation
+    └── 🔄 Re-calculation States
+```
+
+#### 2.2 Primary Keyboard Layouts
+
+**Expense Transaction Keyboard:**
+```
+┌─────────────────────────────────────────┐
+│ 🏷️ Type: Expense                [Edit] │
+├─────────────────────────────────────────┤
+│ 💰 $25.50 [Edit]    📅 Jan 15 [Edit]   │
+├─────────────────────────────────────────┤
+│ 📂 Category: Food             [Change]  │
+├─────────────────────────────────────────┤
+│ 💳 Account: Main Card        [Change]   │
+├─────────────────────────────────────────┤
+│ ✏️ Edit Details    🔄 Re-Calculate      │
+├─────────────────────────────────────────┤
+│              ✅ Submit                  │
+└─────────────────────────────────────────┘
+```
+
+**Transfer Transaction Keyboard:**
+```
+┌─────────────────────────────────────────┐
+│ 🏷️ Type: Transfer               [Edit] │
+├─────────────────────────────────────────┤
+│ 💰 $100.00 [Edit]   📅 Jan 15 [Edit]   │
+├─────────────────────────────────────────┤
+│ 📤 From: Main Card           [Change]   │
+├─────────────────────────────────────────┤
+│ 📥 To: Cash Account          [Change]   │
+├─────────────────────────────────────────┤
+│ 💱 Exchange Rate: 1.0        [Change]   │
+├─────────────────────────────────────────┤
+│ ✏️ Edit Details    🔄 Re-Calculate      │
+├─────────────────────────────────────────┤
+│              ✅ Submit                  │
+└─────────────────────────────────────────┘
+```
+
+**Debt Management Keyboards:**
+```
+┌─────────────────────────────────────────┐
+│ 🏷️ Type: Lend Money            [Edit] │
+├─────────────────────────────────────────┤
+│ 💰 $200.00 [Edit]   📅 Jan 15 [Edit]   │
+├─────────────────────────────────────────┤
+│ 👤 Contact: John Smith       [Change]   │
+├─────────────────────────────────────────┤
+│ 💳 From Account: Main Card   [Change]   │
+├─────────────────────────────────────────┤
+│ 📝 Purpose: Car Repair       [Change]   │
+├─────────────────────────────────────────┤
+│ ✏️ Edit Details    🔄 Re-Calculate      │
+├─────────────────────────────────────────┤
+│              ✅ Submit                  │
+└─────────────────────────────────────────┘
+```
+
+#### 2.3 Field Edit Keyboards
+
+**Transaction Type Selection:**
+```
+┌─────────────────────────────────────────┐
+│         🔄 Change Transaction Type       │
+├─────────────────────────────────────────┤
+│ 💸 Expense      💰 Income               │
+├─────────────────────────────────────────┤
+│ 🔄 Transfer     🤝 Lend Money           │
+├─────────────────────────────────────────┤
+│ 🙏 Borrow       💳 Debt Payment         │
+├─────────────────────────────────────────┤
+│ 💵 Debt Received                        │
+├─────────────────────────────────────────┤
+│ ← Back                                  │
+└─────────────────────────────────────────┘
+```
+
+**Category Selection:**
+```
+┌─────────────────────────────────────────┐
+│          📂 Select Category             │
+├─────────────────────────────────────────┤
+│ 🍕 Food         🚗 Transport            │
+├─────────────────────────────────────────┤
+│ 🏠 Housing      💡 Utilities            │
+├─────────────────────────────────────────┤
+│ 👕 Shopping     🎬 Entertainment        │
+├─────────────────────────────────────────┤
+│ 🏥 Healthcare   📚 Education            │
+├─────────────────────────────────────────┤
+│ ➕ New Category                         │
+├─────────────────────────────────────────┤
+│ ← Back                                  │
+└─────────────────────────────────────────┘
+```
+
+**Contact Selection:**
+```
+┌─────────────────────────────────────────┐
+│            👤 Select Contact            │
+├─────────────────────────────────────────┤
+│ 👤 John Smith         👤 Sarah J.       │
+├─────────────────────────────────────────┤
+│ 👤 Mom                👤 Dad            │
+├─────────────────────────────────────────┤
+│ 👤 Mike Wilson        👤 Lisa Chen      │
+├─────────────────────────────────────────┤
+│ ➕ New Contact                          │
+├─────────────────────────────────────────┤
+│ ← Back                                  │
+└─────────────────────────────────────────┘
+```
+
+#### 2.4 Keyboard Design Principles
+
+- **First Row**: Always shows transaction type with edit option
+- **Second Row**: Amount and date with separate edit buttons
+- **Context Rows**: Adapt based on transaction type (category for expenses, contacts for debts, etc.)
+- **Action Row**: Edit details and re-calculate options
+- **Submit Row**: Final confirmation button
+- **Navigation**: Consistent back buttons and clear flow patterns
+- **Quick Actions**: Common shortcuts for frequently used operations
+
+#### 2.5 Input Collection Strategy
+
+**Challenge**: Telegram bots are stateless, making text input collection for field editing complex without persistent state management.
+
+**Solution**: ID-Based Input Collection - A stateless approach that embeds transaction context directly in user messages.
+
+**Implementation Flow:**
+1. **User Interaction**: User clicks an edit button (e.g., "Edit Amount") on transaction keyboard
+2. **Button State Update**: Bot removes/dims the pressed button and updates keyboard to show "⏳ Amount being edited..."
+3. **Input Request**: Bot sends new message requesting input with transaction ID:
+   ```
+   💰 Send me the new amount with this ID: msg_123
+   
+   Format: msg_123 [new amount]
+   Example: msg_123 150.75
+   
+   [📋 Copy ID: msg_123]
+   ```
+4. **User Response**: User sends message containing both transaction ID and new value: `msg_123 150.75`
+5. **Processing**: Bot parses message, extracts transaction ID, validates new value, updates transaction
+6. **Refresh**: Bot updates original transaction keyboard with new data and restores full functionality
+
+**Message Parsing Patterns:**
+- Flexible format support: `msg_123 150.75` or `150.75 msg_123`
+- Regex extraction of transaction IDs and values
+- Graceful handling of typos and formatting errors
+
+**Error Handling:**
+- Invalid transaction ID: "Transaction msg_999 not found. Check your pending transactions with /pending"
+- Missing value: "Please include the new amount after msg_123"
+- Invalid format: "I found ID msg_123 but couldn't understand the amount. Please send: msg_123 25.50"
+
+**Advantages:**
+- **Truly Stateless**: No persistent state storage required
+- **Self-Contained**: Each input message carries its own context
+- **Concurrent Safe**: Multiple users can edit different transactions simultaneously
+- **No Cleanup**: No abandoned input sessions or timeouts to manage
+- **Scalable**: Naturally handles multiple concurrent editing sessions
+
+**User Experience Example:**
+```
+User: [Clicks "Edit Amount" on transaction msg_123]
+Bot: [Updates keyboard to show "⏳ Amount being edited..."]
+     
+     💰 Send me the new amount with this ID: msg_123
+     Format: msg_123 [new amount]
+     [📋 Copy ID: msg_123]
+
+User: msg_123 150.75
+Bot: ✅ Updated amount to $150.75
+     [Refreshes original transaction keyboard with updated data]
+```
+
+### 3. Enhanced AI Processing
+
+#### 3.1 Multi-modal Analysis
 - **Image Processing**: Receipt/bill photo analysis
 - **Text Processing**: Natural language bill descriptions
 - **Caption Integration**: Use photo captions in analysis process
 - **Debt Detection**: Recognize lending/borrowing language patterns
 
-#### 2.2 Smart Categorization
+#### 3.2 Smart Categorization
 - **Dynamic Categories**: Load from Google Sheets Categories tab
 - **AI Suggestions**: Propose categories based on merchant/description
 - **Fallback Handling**: "Other" category with user review prompt
 - **Debt Classification**: Automatically detect and categorize debt transactions
 
-#### 2.3 Enhanced Data Extraction
+#### 3.3 Enhanced Data Extraction
 ```typescript
 interface EnhancedBillSchema {
   id: string;
@@ -171,7 +386,7 @@ interface EnhancedBillSchema {
 }
 ```
 
-#### 2.4 Debt Detection Patterns
+#### 3.4 Debt Detection Patterns
 The AI will recognize these natural language patterns:
 ```typescript
 const debtPatterns = [
