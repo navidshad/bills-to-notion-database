@@ -1,6 +1,11 @@
-const { google } = require("googleapis");
+import { google } from "googleapis";
 
 class GoogleSheetsAdapter {
+  spreadsheetId: string | undefined;
+  serviceAccountPath: string;
+  auth: any;
+  sheets: any;
+
   constructor() {
     this.spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
     this.serviceAccountPath =
@@ -44,7 +49,7 @@ class GoogleSheetsAdapter {
       });
 
       const existingSheets = spreadsheetInfo.data.sheets.map(
-        (sheet) => sheet.properties.title
+        (sheet: any) => sheet.properties.title
       );
       const requiredSheets = [
         `Bills_${new Date().getFullYear()}`,
@@ -110,7 +115,7 @@ class GoogleSheetsAdapter {
     }
   }
 
-  async setupBillsHeaders(spreadsheetId) {
+  async setupBillsHeaders(spreadsheetId: string) {
     const currentYear = new Date().getFullYear();
     const headers = [
       "ID",
@@ -142,7 +147,7 @@ class GoogleSheetsAdapter {
     });
   }
 
-  async setupTempBillsHeaders(spreadsheetId) {
+  async setupTempBillsHeaders(spreadsheetId: string) {
     const headers = [
       "MessageID",
       "ProcessedData",
@@ -161,7 +166,7 @@ class GoogleSheetsAdapter {
     });
   }
 
-  async setupCategoriesData(spreadsheetId) {
+  async setupCategoriesData(spreadsheetId: string) {
     const categories = [
       ["Category", "Type", "Description"],
       ["Food & Dining", "Expense", "Restaurants, groceries, coffee"],
@@ -186,7 +191,7 @@ class GoogleSheetsAdapter {
     });
   }
 
-  async setupAccountsData(spreadsheetId) {
+  async setupAccountsData(spreadsheetId: string) {
     const accounts = [
       ["Account", "Type", "Description"],
       ["Main Card", "Credit Card", "Primary credit card"],
@@ -206,7 +211,7 @@ class GoogleSheetsAdapter {
     });
   }
 
-  async setupConfigData(spreadsheetId) {
+  async setupConfigData(spreadsheetId: string) {
     const config = [
       ["Setting", "Value", "Description"],
       ["default_currency", "USD", "Default currency for transactions"],
@@ -230,7 +235,7 @@ class GoogleSheetsAdapter {
     });
   }
 
-  normalizeDate(date) {
+  normalizeDate(date: string) {
     // remove time
     date = date.split(" ")[0];
     // remove `"`, `'` around the date
@@ -242,19 +247,25 @@ class GoogleSheetsAdapter {
     return date;
   }
 
-  flatItems(description) {
+  flatItems(description: string) {
     // separate by , and . to new lines
     description = description.split(",").join("\n");
     description = description.split(".").join("\n");
     // trim the lines
     description = description
       .split("\n")
-      .map((line) => line.trim())
+      .map((line: string) => line.trim())
       .join("\n");
     return description;
   }
 
-  async addItem(title, totalPrice, currency_code, date, description) {
+  async addItem(
+    title: string,
+    totalPrice: number,
+    currency_code: string,
+    date: string,
+    description: string
+  ) {
     if (!this.sheets) await this.initialize();
     if (!this.spreadsheetId) {
       throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
@@ -313,7 +324,7 @@ class GoogleSheetsAdapter {
     }
   }
 
-  async ensureYearlySheetExists(year) {
+  async ensureYearlySheetExists(year: number) {
     const sheetName = `Bills_${year}`;
 
     try {
@@ -322,7 +333,7 @@ class GoogleSheetsAdapter {
         spreadsheetId: this.spreadsheetId,
         range: `${sheetName}!A1:A1`,
       });
-    } catch (error) {
+    } catch (error: any) {
       if (error.status === 400) {
         // Sheet doesn't exist, create it
         console.log(`Creating sheet for year ${year}`);
@@ -346,7 +357,7 @@ class GoogleSheetsAdapter {
         });
 
         // Set up headers for the new sheet
-        await this.setupBillsHeaders(this.spreadsheetId);
+        await this.setupBillsHeaders(this.spreadsheetId!);
       } else {
         throw error;
       }
@@ -354,4 +365,4 @@ class GoogleSheetsAdapter {
   }
 }
 
-module.exports = new GoogleSheetsAdapter();
+export default new GoogleSheetsAdapter();

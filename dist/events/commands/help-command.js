@@ -1,17 +1,18 @@
+"use strict";
 /**
  * /help command handler
  * Provides help information to users
  */
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerHelpCommand = registerHelpCommand;
 /**
  * Handle /help command
  * @param {Object} bot - Telegram bot instance
  */
 function registerHelpCommand(bot) {
-  bot.onText(/\/help/, async (msg) => {
-    const chatId = msg.chat.id;
-
-    const helpMessage = `🤖 **Personal Finance Bot Help**
+    bot.onText(/\/help/, async (msg) => {
+        const chatId = msg.chat.id;
+        const helpMessage = `🤖 **Personal Finance Bot Help**
 
 **Commands:**
 • \`/init\` - Set up a new Google Sheets workbook for tracking
@@ -28,11 +29,7 @@ function registerHelpCommand(bot) {
 • Type: "Spent $15 on lunch at McDonald's"
 
 The bot will automatically extract amount, date, and merchant information from your input.`;
-
-    bot.sendMessage(chatId, helpMessage, { parse_mode: "Markdown" });
-  });
+        bot.sendMessage(chatId, helpMessage, { parse_mode: "Markdown" });
+    });
 }
-
-module.exports = {
-  registerHelpCommand,
-};
+//# sourceMappingURL=help-command.js.map

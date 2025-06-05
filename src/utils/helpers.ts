@@ -10,7 +10,14 @@
  * @param {Object} params.options - Additional options (like reply_markup)
  * @param {Object} bot - Telegram bot instance
  */
-function editTextMessage({ newText, message, options = {} }, bot) {
+function editTextMessage(
+  {
+    newText,
+    message,
+    options = {},
+  }: { newText: string; message: any; options?: any },
+  bot: any
+) {
   const { caption } = message;
 
   if (caption) {
@@ -46,7 +53,4 @@ const BILL_REPLY_MARKUP = {
   ],
 };
 
-module.exports = {
-  editTextMessage,
-  BILL_REPLY_MARKUP,
-};
+export { editTextMessage, BILL_REPLY_MARKUP };

@@ -2,17 +2,17 @@
  * Callback query handler for inline keyboard interactions
  */
 
-const textChain = require("../text-chain");
-const googleSheetsAdapter = require("../adapters/google-sheets");
-const { getReceiptDetail } = require("../utils/receipt-processor");
-const { editTextMessage, BILL_REPLY_MARKUP } = require("../utils/helpers");
+import * as textChain from "../text-chain";
+import googleSheetsAdapter from "../adapters/google-sheets";
+import { getReceiptDetail } from "../utils/receipt-processor";
+import { editTextMessage, BILL_REPLY_MARKUP } from "../utils/helpers";
 
 /**
  * Register callback query handler
  * @param {Object} bot - Telegram bot instance
  */
-function registerCallbackHandler(bot) {
-  bot.on("callback_query", async (query) => {
+function registerCallbackHandler(bot: any) {
+  bot.on("callback_query", async (query: any) => {
     //
     // Recalculate the bill
     //
@@ -29,7 +29,7 @@ function registerCallbackHandler(bot) {
         const imageId =
           query.message?.photo[3]?.file_id || query.message?.photo[2]?.file_id;
 
-        const billDetail = await getReceiptDetail(imageId, null, bot);
+        const billDetail = await getReceiptDetail(imageId, "", bot);
 
         editTextMessage(
           {
@@ -108,7 +108,7 @@ function registerCallbackHandler(bot) {
           },
           bot
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error adding to Google Sheets:", error);
         bot.sendMessage(
           query.message.chat.id,
@@ -130,6 +130,4 @@ function registerCallbackHandler(bot) {
   });
 }
 
-module.exports = {
-  registerCallbackHandler,
-};
+export { registerCallbackHandler };

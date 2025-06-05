@@ -7,10 +7,24 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch Program",
+      "name": "Launch TypeScript",
       "skipFiles": ["<node_internals>/**"],
-      "program": "${workspaceFolder}/src/index.js",
-      "envFile": "${workspaceFolder}/.env"
+      "program": "${workspaceFolder}/src/index.ts",
+      "runtimeArgs": ["-r", "ts-node/register"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "restart": true
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Compiled JS",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/dist/index.js",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "preLaunchTask": "${command:npm.run.build}"
     }
   ]
 }

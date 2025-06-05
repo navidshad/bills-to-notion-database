@@ -2,8 +2,8 @@
  * Receipt processing utilities
  */
 
-const textChain = require("../text-chain");
-const visionChain = require("../vision-chain");
+import * as textChain from "../text-chain";
+import * as visionChain from "../vision-chain";
 
 /**
  * Process receipt from image and caption
@@ -12,12 +12,10 @@ const visionChain = require("../vision-chain");
  * @param {Object} bot - Telegram bot instance
  * @returns {Promise<Object>} Processed bill details
  */
-async function getReceiptDetail(imageId, caption, bot) {
+async function getReceiptDetail(imageId: string, caption: string, bot: any) {
   const fileLink = await bot.getFileLink(imageId);
   const extractedBill = await visionChain.extractImageDetail(fileLink, caption);
   return await textChain.generateBillInfo(extractedBill);
 }
 
-module.exports = {
-  getReceiptDetail,
-};
+export { getReceiptDetail };

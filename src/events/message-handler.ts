@@ -2,16 +2,16 @@
  * Message handler for processing photos and text messages
  */
 
-const textChain = require("../text-chain");
-const { getReceiptDetail } = require("../utils/receipt-processor");
-const { BILL_REPLY_MARKUP } = require("../utils/helpers");
+import * as textChain from "../text-chain";
+import { getReceiptDetail } from "../utils/receipt-processor";
+import { BILL_REPLY_MARKUP } from "../utils/helpers";
 
 /**
  * Register message handler
  * @param {Object} bot - Telegram bot instance
  */
-function registerMessageHandler(bot) {
-  bot.on("message", async (msg) => {
+function registerMessageHandler(bot: any) {
+  bot.on("message", async (msg: any) => {
     const chatId = msg.chat.id;
 
     // Skip if it's a command (starts with /)
@@ -97,6 +97,4 @@ function registerMessageHandler(bot) {
   });
 }
 
-module.exports = {
-  registerMessageHandler,
-};
+export { registerMessageHandler };

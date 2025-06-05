@@ -1,4 +1,4 @@
-const { Client } = require("@notionhq/client");
+import { Client } from "@notionhq/client";
 
 // Initializing a client
 const notion = new Client({
@@ -18,7 +18,7 @@ const databaseId = process.env.DATABASE_ID || "";
 //     });
 // }
 
-function flatItems(description) {
+function flatItems(description: string) {
   // seperate by , and . to new lines
   description = description.split(",").join("\n");
   description = description.split(".").join("\n");
@@ -26,13 +26,13 @@ function flatItems(description) {
   // trim the lines
   description = description
     .split("\n")
-    .map((line) => line.trim())
+    .map((line: string) => line.trim())
     .join("\n");
 
   return description;
 }
 
-function normalizeDate(date) {
+function normalizeDate(date: string) {
   // remove time
   date = date.split(" ")[0];
 
@@ -48,7 +48,13 @@ function normalizeDate(date) {
   return date;
 }
 
-async function addItem(title, totalPrice, currency_code, date, description) {
+async function addItem(
+  title: string,
+  totalPrice: number,
+  currency_code: string,
+  date: string,
+  description: string
+) {
   description = description || "";
   description = flatItems(description);
 
@@ -99,12 +105,10 @@ async function addItem(title, totalPrice, currency_code, date, description) {
       },
     });
     console.log("Success! Entry added.");
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error adding item:", error.body);
     throw error;
   }
 }
 
-module.exports = {
-  addItem,
-};
+export { addItem };

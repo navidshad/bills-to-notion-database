@@ -3,13 +3,13 @@
  * Main entry point - imports and registers all event handlers
  */
 
-const TelegramBot = require("node-telegram-bot-api");
+import TelegramBot from "node-telegram-bot-api";
 
 // Import event handlers
-const { registerInitCommand } = require("./events/commands/init-command");
-const { registerHelpCommand } = require("./events/commands/help-command");
-const { registerMessageHandler } = require("./events/message-handler");
-const { registerCallbackHandler } = require("./events/callback-handler");
+import { registerInitCommand } from "./events/commands/init-command";
+import { registerHelpCommand } from "./events/commands/help-command";
+import { registerMessageHandler } from "./events/message-handler";
+import { registerCallbackHandler } from "./events/callback-handler";
 
 // Replace the value below with the Telegram token you receive from @BotFather
 const token = process.env.BOT_TOKEN || "";
