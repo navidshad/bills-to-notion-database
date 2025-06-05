@@ -322,34 +322,28 @@ Config Structure:
             └─────────────────┘  └─────────────────┘
 ```
 
-### 6.3 File Structure
+### 6.3 File Structure (✅ IMPLEMENTED)
 ```
+├── index.js                     # Clean main entry point (23 lines!)
+├── text-chain.js               # Text processing AI chain
+├── vision-chain.js             # Image processing AI chain
 ├── src/
-│   ├── index.js                 # Main bot entry point
 │   ├── adapters/
 │   │   ├── google-sheets.js     # Google Sheets integration
-│   │   └── notion.js           # Legacy Notion (for migration)
-│   ├── ai/
-│   │   ├── text-chain.js       # Text processing
-│   │   ├── vision-chain.js     # Image processing
-│   │   └── category-suggester.js
-│   ├── handlers/
-│   │   ├── message-handler.js  # Message processing
-│   │   ├── callback-handler.js # Button interactions
-│   │   └── edit-handler.js     # Edit functionality
+│   │   └── notion-adapter.js   # Legacy Notion (for migration)
+│   ├── events/
+│   │   ├── commands/
+│   │   │   ├── init-command.js  # /init command handler
+│   │   │   └── help-command.js  # /help command handler
+│   │   ├── message-handler.js   # Photo/text message processing
+│   │   └── callback-handler.js  # Inline keyboard interactions
 │   ├── utils/
-│   │   ├── config.js           # Configuration management
-│   │   ├── validation.js       # Data validation
-│   │   └── helpers.js          # Utility functions
+│   │   ├── helpers.js          # editTextMessage + BILL_REPLY_MARKUP
+│   │   └── receipt-processor.js # getReceiptDetail function
 │   └── keyboards/
-│       └── bill-keyboard.js    # Dynamic keyboard generation
-├── config/
-│   ├── default.json
-│   └── production.json
-└── docs/
-    ├── api.md
-    ├── setup.md
-    └── user-guide.md
+│       └── (existing)          # For future enhanced keyboards
+├── config/ (planned)
+└── docs/ (planned)
 ```
 
 ## Implementation Phases
@@ -368,10 +362,16 @@ Config Structure:
 - [x] Created SETUP.md guide for Google Sheets configuration
 - [x] Updated .gitignore to exclude service account files
 - [x] Updated package.json dependencies (removed @notionhq/client, added googleapis)
+- [x] **REFACTORING COMPLETE**: Broke down monolithic index.js into modular structure ✅
+  - [x] Created `src/events/` directory with command and handler separation
+  - [x] Created `src/utils/` for shared functionality (helpers, receipt-processor)
+  - [x] Modular command handlers: init-command.js, help-command.js
+  - [x] Separated message and callback handling into dedicated files
+  - [x] Clean index.js entry point (23 lines) with proper imports
 - [x] **TESTING COMPLETE**: User can send photo/text → bot processes → saves to Google Sheets ✅
 - [x] **Working Version**: Bot processes bills and saves to Google Sheets ✅
 
-**Status**: ✅ **PHASE 1 COMPLETE** - Full Google Sheets migration successful!
+**Status**: ✅ **PHASE 1 COMPLETE** - Full Google Sheets migration + modular refactoring successful!
 
 ### Phase 2: Command Structure & Enhanced UI (Improved UX)
 **Deliverable**: Bot with proper commands and better keyboards
