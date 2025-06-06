@@ -85,7 +85,7 @@ class GoogleSheetsAdapter {
                     : sheetName.startsWith("Bills_")
                     ? 20
                     : sheetName === "Categories" || sheetName === "Accounts"
-                    ? 5 // ID, Name, Emoji, Type, Description
+                    ? 4 // ID, Name, Emoji, Description
                     : 3, // Config sheet: Setting, Value, Description
               },
             },
@@ -169,83 +169,45 @@ class GoogleSheetsAdapter {
   }
 
   async setupCategoriesData(spreadsheetId: string) {
-    const categories = [
-      ["ID", "Name", "Emoji", "Type", "Description"],
-      ["food", "Food", "🍕", "Expense", "Restaurants, groceries, coffee"],
-      [
-        "transport",
-        "Transport",
-        "🚗",
-        "Expense",
-        "Gas, public transport, parking",
-      ],
-      [
-        "shopping",
-        "Shopping",
-        "👕",
-        "Expense",
-        "Clothing, electronics, general shopping",
-      ],
-      [
-        "utilities",
-        "Utilities",
-        "💡",
-        "Expense",
-        "Electricity, water, internet, phone",
-      ],
-      [
-        "healthcare",
-        "Healthcare",
-        "🏥",
-        "Expense",
-        "Medical expenses, pharmacy, insurance",
-      ],
-      [
-        "entertainment",
-        "Entertainment",
-        "🎬",
-        "Expense",
-        "Movies, games, subscriptions",
-      ],
-      [
-        "housing",
-        "Housing",
-        "🏠",
-        "Expense",
-        "Rent, mortgage, home maintenance",
-      ],
-      ["education", "Education", "📚", "Expense", "Books, courses, training"],
-      ["other", "Other", "📋", "Expense", "Miscellaneous expenses"],
+    const range = "Categories!A1:D100";
+    const values = [
+      ["ID", "Name", "Emoji", "Description"],
+      ["food", "Food", "🍕", "Restaurants, groceries, takeout"],
+      ["transport", "Transport", "🚗", "Gas, public transit, rideshare"],
+      ["shopping", "Shopping", "👕", "Clothes, electronics, general purchases"],
+      ["utilities", "Utilities", "💡", "Electricity, water, internet, phone"],
+      ["healthcare", "Healthcare", "🏥", "Medical bills, pharmacy, insurance"],
+      ["entertainment", "Entertainment", "🎬", "Movies, games, subscriptions"],
+      ["housing", "Housing", "🏠", "Rent, mortgage, maintenance"],
+      ["education", "Education", "📚", "Books, courses, tuition"],
+      ["other", "Other", "📋", "Miscellaneous expenses"],
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Categories!A1:E10",
+      range,
       valueInputOption: "RAW",
-      requestBody: {
-        values: categories,
-      },
+      requestBody: { values },
     });
   }
 
   async setupAccountsData(spreadsheetId: string) {
-    const accounts = [
-      ["ID", "Name", "Emoji", "Type", "Description"],
-      ["main_card", "Main Card", "💳", "Credit Card", "Primary credit card"],
-      ["checking", "Checking", "🏦", "Bank Account", "Bank checking account"],
-      ["cash", "Cash", "💰", "Cash", "Physical cash"],
-      ["credit", "Credit Card", "💳", "Credit Card", "Secondary credit card"],
-      ["savings", "Savings", "💰", "Bank Account", "Savings account"],
-      ["digital", "Digital Wallet", "📱", "Digital", "PayPal, Apple Pay, etc."],
+    const range = "Accounts!A1:D100";
+    const values = [
+      ["ID", "Name", "Emoji", "Description"],
+      ["main_card", "Main Card", "💳", "Primary debit/credit card"],
+      ["checking", "Checking", "🏦", "Main checking account"],
+      ["cash", "Cash", "💰", "Physical cash payments"],
+      ["credit", "Credit Card", "💳", "Credit card payments"],
+      ["savings", "Savings", "💰", "Savings account transfers"],
+      ["digital", "Digital Wallet", "📱", "PayPal, Venmo, digital payments"],
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Accounts!A1:E7",
+      range,
       valueInputOption: "RAW",
-      requestBody: {
-        values: accounts,
-      },
+      requestBody: { values },
     });
   }
 
@@ -386,42 +348,76 @@ class GoogleSheetsAdapter {
 
   async getCategories() {
     try {
-      const response = await this.getRange("Categories!A2:E");
-      if (!response || !response.values) {
-        throw new Error("No categories data found");
-      }
+      const range = "Categories!A2:D";
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range,
+      });
 
-      return response.values.map((row: any[]) => ({
+      const rows = response.data.values || [];
+      return rows.map((row: any[]) => ({
         id: row[0] || "",
         name: row[1] || "",
         emoji: row[2] || "📋",
-        type: row[3] || "Expense",
-        description: row[4] || "",
+        description: row[3] || "",
       }));
     } catch (error) {
-      console.error("Error reading categories:", error);
-      // Return default categories if sheet read fails
+      console.error("Error getting categories from Google Sheets:", error);
+      // Fallback to default categories
       return [
         {
           id: "food",
           name: "Food",
           emoji: "🍕",
-          type: "Expense",
-          description: "Food and dining",
+          description: "Restaurants, groceries, takeout",
         },
         {
           id: "transport",
           name: "Transport",
           emoji: "🚗",
-          type: "Expense",
-          description: "Transportation",
+          description: "Gas, public transit, rideshare",
+        },
+        {
+          id: "shopping",
+          name: "Shopping",
+          emoji: "👕",
+          description: "Clothes, electronics, general purchases",
+        },
+        {
+          id: "utilities",
+          name: "Utilities",
+          emoji: "💡",
+          description: "Electricity, water, internet, phone",
+        },
+        {
+          id: "healthcare",
+          name: "Healthcare",
+          emoji: "🏥",
+          description: "Medical bills, pharmacy, insurance",
+        },
+        {
+          id: "entertainment",
+          name: "Entertainment",
+          emoji: "🎬",
+          description: "Movies, games, subscriptions",
+        },
+        {
+          id: "housing",
+          name: "Housing",
+          emoji: "🏠",
+          description: "Rent, mortgage, maintenance",
+        },
+        {
+          id: "education",
+          name: "Education",
+          emoji: "📚",
+          description: "Books, courses, tuition",
         },
         {
           id: "other",
           name: "Other",
           emoji: "📋",
-          type: "Expense",
-          description: "Other expenses",
+          description: "Miscellaneous expenses",
         },
       ];
     }
@@ -429,42 +425,58 @@ class GoogleSheetsAdapter {
 
   async getAccounts() {
     try {
-      const response = await this.getRange("Accounts!A2:E");
-      if (!response || !response.values) {
-        throw new Error("No accounts data found");
-      }
+      const range = "Accounts!A2:D";
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range,
+      });
 
-      return response.values.map((row: any[]) => ({
+      const rows = response.data.values || [];
+      return rows.map((row: any[]) => ({
         id: row[0] || "",
         name: row[1] || "",
         emoji: row[2] || "💳",
-        type: row[3] || "Account",
-        description: row[4] || "",
+        description: row[3] || "",
       }));
     } catch (error) {
-      console.error("Error reading accounts:", error);
-      // Return default accounts if sheet read fails
+      console.error("Error getting accounts from Google Sheets:", error);
+      // Fallback to default accounts
       return [
         {
           id: "main_card",
           name: "Main Card",
           emoji: "💳",
-          type: "Credit Card",
-          description: "Primary card",
-        },
-        {
-          id: "cash",
-          name: "Cash",
-          emoji: "💰",
-          type: "Cash",
-          description: "Physical cash",
+          description: "Primary debit/credit card",
         },
         {
           id: "checking",
           name: "Checking",
           emoji: "🏦",
-          type: "Bank Account",
-          description: "Checking account",
+          description: "Main checking account",
+        },
+        {
+          id: "cash",
+          name: "Cash",
+          emoji: "💰",
+          description: "Physical cash payments",
+        },
+        {
+          id: "credit",
+          name: "Credit Card",
+          emoji: "💳",
+          description: "Credit card payments",
+        },
+        {
+          id: "savings",
+          name: "Savings",
+          emoji: "💰",
+          description: "Savings account transfers",
+        },
+        {
+          id: "digital",
+          name: "Digital Wallet",
+          emoji: "📱",
+          description: "PayPal, Venmo, digital payments",
         },
       ];
     }
