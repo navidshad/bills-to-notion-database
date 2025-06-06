@@ -3,7 +3,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import { extractJSON } from "./helpers";
 
 const chat = new ChatOpenAI({
-  modelName: "gpt-4o",
+  modelName: "gpt-4.1-mini",
   maxTokens: 4096,
 });
 

@@ -3,6 +3,13 @@
  * Enhanced keyboard layouts for transaction management
  */
 
+import {
+  CallbackActions,
+  CallbackDataGenerator,
+  PLACEHOLDER_FEATURES,
+  isPlaceholderFeature,
+} from "../types/callback.types";
+
 /**
  * Create expense transaction keyboard
  */
@@ -13,43 +20,77 @@ function createExpenseKeyboard(transactionId: number, transactionData: any) {
   const category = transactionData?.category || "Other";
   const account = transactionData?.account || "Main Card";
 
+  // Encode currency in callback data if available
+  const currency = transactionData?.currency_code || "";
+  const accountCallback = CallbackDataGenerator.forAccountEdit(
+    transactionId,
+    currency
+  );
+
   return {
     inline_keyboard: [
       [
         {
           text: "🏷️ Type: Expense",
-          callback_data: `edit_type_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_TYPE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `💰 Amount: $${amount}`,
-          callback_data: `edit_amount_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_AMOUNT,
+            transactionId
+          ),
         },
         {
           text: `📅 Date: ${date}`,
-          callback_data: `edit_date_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_DATE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `📂 Category: ${category}`,
-          callback_data: `edit_category_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_CATEGORY,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `💳 Account: ${account}`,
-          callback_data: `edit_account_${transactionId}`,
+          callback_data: accountCallback,
         },
       ],
       [
         {
           text: `📋 Copy ID: #${transactionId}`,
-          callback_data: `copy_id_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.COPY_ID,
+            transactionId
+          ),
         },
-        { text: "❌ Cancel", callback_data: `cancel_${transactionId}` },
-        { text: "✅ Submit", callback_data: `submit_${transactionId}` },
+        {
+          text: "❌ Cancel",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.CANCEL,
+            transactionId
+          ),
+        },
+        {
+          text: "✅ Submit",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.SUBMIT,
+            transactionId
+          ),
+        },
       ],
     ],
   };
@@ -65,43 +106,77 @@ function createIncomeKeyboard(transactionId: number, transactionData: any) {
   const source = transactionData?.source || "Salary";
   const account = transactionData?.account || "Main Card";
 
+  // Encode currency in callback data if available
+  const currency = transactionData?.currency_code || "";
+  const accountCallback = CallbackDataGenerator.forAccountEdit(
+    transactionId,
+    currency
+  );
+
   return {
     inline_keyboard: [
       [
         {
           text: "🏷️ Type: Income",
-          callback_data: `edit_type_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_TYPE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `💰 Amount: $${amount}`,
-          callback_data: `edit_amount_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_AMOUNT,
+            transactionId
+          ),
         },
         {
           text: `📅 Date: ${date}`,
-          callback_data: `edit_date_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_DATE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `📤 Source: ${source}`,
-          callback_data: `edit_source_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_SOURCE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `💳 Account: ${account}`,
-          callback_data: `edit_account_${transactionId}`,
+          callback_data: accountCallback,
         },
       ],
       [
         {
           text: `📋 Copy ID: #${transactionId}`,
-          callback_data: `copy_id_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.COPY_ID,
+            transactionId
+          ),
         },
-        { text: "❌ Cancel", callback_data: `cancel_${transactionId}` },
-        { text: "✅ Submit", callback_data: `submit_${transactionId}` },
+        {
+          text: "❌ Cancel",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.CANCEL,
+            transactionId
+          ),
+        },
+        {
+          text: "✅ Submit",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.SUBMIT,
+            transactionId
+          ),
+        },
       ],
     ],
   };
@@ -127,42 +202,75 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
       [
         {
           text: "🏷️ Type: Transfer",
-          callback_data: `edit_type_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_TYPE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `💰 Amount: $${amount}`,
-          callback_data: `edit_amount_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_AMOUNT,
+            transactionId
+          ),
         },
         {
           text: `📅 Date: ${date}`,
-          callback_data: `edit_date_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_DATE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `📤 From: ${fromAccount}`,
-          callback_data: `edit_from_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_FROM,
+            transactionId
+          ),
         },
         {
           text: `📥 To: ${toAccount}`,
-          callback_data: `edit_to_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_TO,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `💱 Rate: ${exchangeRate}`,
-          callback_data: `edit_exchange_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_EXCHANGE,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: `📋 Copy ID: #${transactionId}`,
-          callback_data: `copy_id_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.COPY_ID,
+            transactionId
+          ),
         },
-        { text: "❌ Cancel", callback_data: `cancel_${transactionId}` },
-        { text: "✅ Submit", callback_data: `submit_${transactionId}` },
+        {
+          text: "❌ Cancel",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.CANCEL,
+            transactionId
+          ),
+        },
+        {
+          text: "✅ Submit",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.SUBMIT,
+            transactionId
+          ),
+        },
       ],
     ],
   };
@@ -177,13 +285,19 @@ function createCancelConfirmationKeyboard(transactionId: number) {
       [
         {
           text: "✅ Yes, Cancel Transaction",
-          callback_data: `confirm_cancel_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.CONFIRM_CANCEL,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: "← No, Go Back",
-          callback_data: `back_transaction_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.BACK_TRANSACTION,
+            transactionId
+          ),
         },
       ],
     ],
@@ -197,33 +311,69 @@ function createTransactionTypeKeyboard(transactionId: number) {
   return {
     inline_keyboard: [
       [
-        { text: "💸 Expense", callback_data: `type_expense_${transactionId}` },
-        { text: "💰 Income", callback_data: `type_income_${transactionId}` },
+        {
+          text: "💸 Expense",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_EXPENSE,
+            transactionId
+          ),
+        },
+        {
+          text: "💰 Income",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_INCOME,
+            transactionId
+          ),
+        },
       ],
       [
         {
           text: "🔄 Transfer",
-          callback_data: `type_transfer_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_TRANSFER,
+            transactionId
+          ),
         },
-        { text: "🤝 Lend Money", callback_data: `type_lend_${transactionId}` },
+        {
+          text: "🤝 Lend Money",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_LEND,
+            transactionId
+          ),
+        },
       ],
       [
-        { text: "🙏 Borrow", callback_data: `type_borrow_${transactionId}` },
+        {
+          text: "🙏 Borrow",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_BORROW,
+            transactionId
+          ),
+        },
         {
           text: "💳 Debt Payment",
-          callback_data: `type_debt_payment_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_DEBT_PAYMENT,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: "💵 Debt Received",
-          callback_data: `type_debt_received_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.TYPE_DEBT_RECEIVED,
+            transactionId
+          ),
         },
       ],
       [
         {
           text: "← Back to Transaction",
-          callback_data: `back_transaction_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.BACK_TRANSACTION,
+            transactionId
+          ),
         },
       ],
     ],
@@ -247,7 +397,10 @@ async function createCategoryKeyboard(transactionId: number) {
     if (categories[i]) {
       row.push({
         text: `${categories[i].emoji} ${categories[i].name}`,
-        callback_data: `cat_${categories[i].id}_${transactionId}`,
+        callback_data: CallbackDataGenerator.forCategorySelect(
+          categories[i].id,
+          transactionId
+        ),
       });
     }
 
@@ -255,7 +408,10 @@ async function createCategoryKeyboard(transactionId: number) {
     if (categories[i + 1]) {
       row.push({
         text: `${categories[i + 1].emoji} ${categories[i + 1].name}`,
-        callback_data: `cat_${categories[i + 1].id}_${transactionId}`,
+        callback_data: CallbackDataGenerator.forCategorySelect(
+          categories[i + 1].id,
+          transactionId
+        ),
       });
     }
 
@@ -266,14 +422,20 @@ async function createCategoryKeyboard(transactionId: number) {
   categoryRows.push([
     {
       text: "➕ Create New Category",
-      callback_data: `new_category_${transactionId}`,
+      callback_data: CallbackDataGenerator.forTransaction(
+        CallbackActions.NEW_CATEGORY,
+        transactionId
+      ),
     },
   ]);
 
   categoryRows.push([
     {
       text: "← Back to Transaction",
-      callback_data: `back_transaction_${transactionId}`,
+      callback_data: CallbackDataGenerator.forTransaction(
+        CallbackActions.BACK_TRANSACTION,
+        transactionId
+      ),
     },
   ]);
 
@@ -285,10 +447,36 @@ async function createCategoryKeyboard(transactionId: number) {
 /**
  * Create account selection keyboard
  */
-async function createAccountKeyboard(transactionId: number) {
+async function createAccountKeyboard(
+  transactionId: number,
+  targetCurrency?: string
+) {
   const googleSheetsAdapter = (await import("../adapters/google-sheets"))
     .default;
-  const accounts = await googleSheetsAdapter.getAccounts();
+  let accounts = await googleSheetsAdapter.getAccounts();
+
+  // If a target currency is specified, filter accounts by that currency
+  if (targetCurrency) {
+    const currencyUppercase = targetCurrency.toUpperCase();
+    const matchingAccounts = accounts.filter(
+      (account: any) => account.currency === currencyUppercase
+    );
+
+    // If no accounts exist for this currency, create a temporary cash account
+    if (matchingAccounts.length === 0) {
+      const tempCashAccount = {
+        id: `temp_cash_${currencyUppercase.toLowerCase()}`,
+        name: `Cash (${currencyUppercase})`,
+        emoji: "💰",
+        currency: currencyUppercase,
+        description: `Temporary cash account for ${currencyUppercase}`,
+        isTemporary: true,
+      };
+      matchingAccounts.push(tempCashAccount);
+    }
+
+    accounts = matchingAccounts;
+  }
 
   // Create rows of 2 accounts each
   const accountRows = [];
@@ -297,17 +485,33 @@ async function createAccountKeyboard(transactionId: number) {
 
     // First account in the row
     if (accounts[i]) {
+      const accountLabel = accounts[i].isTemporary
+        ? `${accounts[i].emoji} ${accounts[i].name} (new, will add after submit)`
+        : `${accounts[i].emoji} ${accounts[i].name}`;
+
       row.push({
-        text: `${accounts[i].emoji} ${accounts[i].name}`,
-        callback_data: `acc_${accounts[i].id}_${transactionId}`,
+        text: accountLabel,
+        callback_data: CallbackDataGenerator.forAccountSelect(
+          accounts[i].id,
+          transactionId
+        ),
       });
     }
 
     // Second account in the row (if exists)
     if (accounts[i + 1]) {
+      const accountLabel = accounts[i + 1].isTemporary
+        ? `${accounts[i + 1].emoji} ${
+            accounts[i + 1].name
+          } (new, will add after submit)`
+        : `${accounts[i + 1].emoji} ${accounts[i + 1].name}`;
+
       row.push({
-        text: `${accounts[i + 1].emoji} ${accounts[i + 1].name}`,
-        callback_data: `acc_${accounts[i + 1].id}_${transactionId}`,
+        text: accountLabel,
+        callback_data: CallbackDataGenerator.forAccountSelect(
+          accounts[i + 1].id,
+          transactionId
+        ),
       });
     }
 
@@ -318,14 +522,20 @@ async function createAccountKeyboard(transactionId: number) {
   accountRows.push([
     {
       text: "➕ Create New Account",
-      callback_data: `new_account_${transactionId}`,
+      callback_data: CallbackDataGenerator.forTransaction(
+        CallbackActions.NEW_ACCOUNT,
+        transactionId
+      ),
     },
   ]);
 
   accountRows.push([
     {
       text: "← Back to Transaction",
-      callback_data: `back_transaction_${transactionId}`,
+      callback_data: CallbackDataGenerator.forTransaction(
+        CallbackActions.BACK_TRANSACTION,
+        transactionId
+      ),
     },
   ]);
 
@@ -341,13 +551,28 @@ function createConfirmationKeyboard(transactionId: number) {
   return {
     inline_keyboard: [
       [
-        { text: "✅ Confirm", callback_data: `confirm_${transactionId}` },
-        { text: "❌ Cancel", callback_data: `cancel_${transactionId}` },
+        {
+          text: "✅ Confirm",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.CONFIRM,
+            transactionId
+          ),
+        },
+        {
+          text: "❌ Cancel",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.CANCEL,
+            transactionId
+          ),
+        },
       ],
       [
         {
           text: "✏️ Edit Details",
-          callback_data: `edit_details_${transactionId}`,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_DETAILS,
+            transactionId
+          ),
         },
       ],
     ],
@@ -422,13 +647,18 @@ const PLACEHOLDER_MESSAGES = {
  * Handle placeholder button responses
  */
 function handlePlaceholderButton(callback_data: string): string {
-  const feature = Object.keys(PLACEHOLDER_MESSAGES).find((key) =>
-    callback_data.includes(key)
-  );
-  return (
-    PLACEHOLDER_MESSAGES[feature as keyof typeof PLACEHOLDER_MESSAGES] ||
-    "🚧 This feature is not yet implemented.\n\nStay tuned for updates!"
-  );
+  // Use the centralized placeholder checking
+  if (isPlaceholderFeature(callback_data)) {
+    const feature = Object.keys(PLACEHOLDER_MESSAGES).find((key) =>
+      callback_data.includes(key)
+    );
+    return (
+      PLACEHOLDER_MESSAGES[feature as keyof typeof PLACEHOLDER_MESSAGES] ||
+      "🚧 This feature is not yet implemented.\n\nStay tuned for updates!"
+    );
+  }
+
+  return "🚧 This feature is not yet implemented.\n\nStay tuned for updates!";
 }
 
 /**

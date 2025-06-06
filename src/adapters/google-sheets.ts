@@ -84,8 +84,10 @@ class GoogleSheetsAdapter {
                     ? 15
                     : sheetName.startsWith("Bills_")
                     ? 20
-                    : sheetName === "Categories" || sheetName === "Accounts"
+                    : sheetName === "Categories"
                     ? 4 // ID, Name, Emoji, Description
+                    : sheetName === "Accounts"
+                    ? 5 // ID, Name, Emoji, Currency, Description
                     : 3, // Config sheet: Setting, Value, Description
               },
             },
@@ -192,15 +194,13 @@ class GoogleSheetsAdapter {
   }
 
   async setupAccountsData(spreadsheetId: string) {
-    const range = "Accounts!A1:D100";
+    const range = "Accounts!A1:E100";
     const values = [
-      ["ID", "Name", "Emoji", "Description"],
-      ["main_card", "Main Card", "💳", "Primary debit/credit card"],
-      ["checking", "Checking", "🏦", "Main checking account"],
-      ["cash", "Cash", "💰", "Physical cash payments"],
-      ["credit", "Credit Card", "💳", "Credit card payments"],
-      ["savings", "Savings", "💰", "Savings account transfers"],
-      ["digital", "Digital Wallet", "📱", "PayPal, Venmo, digital payments"],
+      ["ID", "Name", "Emoji", "Currency", "Description"],
+      ["main_card", "Main Card", "💳", "USD", "Primary debit/credit card"],
+      ["checking", "Checking", "🏦", "USD", "Main checking account"],
+      ["euro_card", "Euro Card", "💳", "EUR", "European debit/credit card"],
+      ["euro_cash", "Euro Cash", "💰", "EUR", "Physical euro cash"],
     ];
 
     await this.sheets.spreadsheets.values.update({
@@ -214,7 +214,6 @@ class GoogleSheetsAdapter {
   async setupConfigData(spreadsheetId: string) {
     const config = [
       ["Setting", "Value", "Description"],
-      ["default_currency", "USD", "Default currency for transactions"],
       ["default_account", "Main Card", "Default account for expenses"],
       [
         "default_category",
@@ -227,7 +226,7 @@ class GoogleSheetsAdapter {
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Config!A1:C6",
+      range: "Config!A1:C5",
       valueInputOption: "RAW",
       requestBody: {
         values: config,
@@ -288,12 +287,15 @@ class GoogleSheetsAdapter {
       // Use provided ID or generate a fallback timestamp-based ID
       const itemId = id || Date.now();
 
+      // Use provided currency or get default from default account
+      const finalCurrency = currency_code || (await this.getDefaultCurrency());
+
       const values = [
         itemId, // ID
         normalizedDate, // Date
         title, // Title/Description
         totalPrice, // Amount
-        currency_code, // Currency
+        finalCurrency.toUpperCase(), // Currency
         "Other", // Category (default)
         "Expense", // Transaction Type (default)
         "Main Card", // Account (default)
@@ -425,7 +427,7 @@ class GoogleSheetsAdapter {
 
   async getAccounts() {
     try {
-      const range = "Accounts!A2:D";
+      const range = "Accounts!A2:E";
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
@@ -436,49 +438,93 @@ class GoogleSheetsAdapter {
         id: row[0] || "",
         name: row[1] || "",
         emoji: row[2] || "💳",
-        description: row[3] || "",
+        currency: (row[3] || "USD").toString().toUpperCase(),
+        description: row[4] || "",
       }));
     } catch (error) {
       console.error("Error getting accounts from Google Sheets:", error);
-      // Fallback to default accounts
+      // Fallback to default accounts (only USD and EUR)
       return [
         {
           id: "main_card",
           name: "Main Card",
           emoji: "💳",
+          currency: "USD",
           description: "Primary debit/credit card",
         },
         {
           id: "checking",
           name: "Checking",
           emoji: "🏦",
+          currency: "USD",
           description: "Main checking account",
         },
         {
-          id: "cash",
-          name: "Cash",
-          emoji: "💰",
-          description: "Physical cash payments",
-        },
-        {
-          id: "credit",
-          name: "Credit Card",
+          id: "euro_card",
+          name: "Euro Card",
           emoji: "💳",
-          description: "Credit card payments",
+          currency: "EUR",
+          description: "European debit/credit card",
         },
         {
-          id: "savings",
-          name: "Savings",
+          id: "euro_cash",
+          name: "Euro Cash",
           emoji: "💰",
-          description: "Savings account transfers",
-        },
-        {
-          id: "digital",
-          name: "Digital Wallet",
-          emoji: "📱",
-          description: "PayPal, Venmo, digital payments",
+          currency: "EUR",
+          description: "Physical euro cash",
         },
       ];
+    }
+  }
+
+  async getConfig() {
+    try {
+      const range = "Config!A2:B";
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range,
+      });
+
+      const rows = response.data.values || [];
+      const config: Record<string, string> = {};
+
+      rows.forEach((row: any[]) => {
+        if (row[0] && row[1]) {
+          config[row[0]] = row[1];
+        }
+      });
+
+      return config;
+    } catch (error) {
+      console.error("Error getting config from Google Sheets:", error);
+      // Fallback to default config
+      return {
+        default_account: "Main Card",
+        default_category: "Other",
+        timezone: "UTC",
+        date_format: "YYYY-MM-DD",
+      };
+    }
+  }
+
+  async getDefaultCurrency(): Promise<string> {
+    try {
+      // Get the default account from config
+      const config = await this.getConfig();
+      const defaultAccountName = config.default_account || "Main Card";
+
+      // Get all accounts and find the default one
+      const accounts = await this.getAccounts();
+      const defaultAccount = accounts.find(
+        (acc: any) =>
+          acc.name === defaultAccountName || acc.id === defaultAccountName
+      );
+
+      // Return the currency from the default account, fallback to USD
+      return defaultAccount ? defaultAccount.currency : "USD";
+    } catch (error) {
+      console.error("Error getting default currency:", error);
+      return "USD";
     }
   }
 
@@ -519,6 +565,229 @@ class GoogleSheetsAdapter {
       } else {
         throw error;
       }
+    }
+  }
+
+  /**
+   * Create a new account in the Google Sheets
+   */
+  async createAccount(
+    id: string,
+    name: string,
+    emoji: string,
+    currency: string,
+    description: string
+  ) {
+    try {
+      if (!this.sheets) await this.initialize();
+      if (!this.spreadsheetId) {
+        throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+      }
+
+      // Normalize currency to uppercase
+      const normalizedCurrency = currency.toUpperCase();
+
+      // Get current accounts to find the next available row
+      const currentData = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: "Accounts!A:E",
+      });
+
+      const rows = currentData.data.values || [];
+      const nextRow = rows.length + 1;
+
+      // Append the new account
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Accounts!A${nextRow}:E${nextRow}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[id, name, emoji, normalizedCurrency, description]],
+        },
+      });
+
+      console.log(
+        `Successfully created account: ${name} (${normalizedCurrency})`
+      );
+      return { success: true, id, name, currency: normalizedCurrency };
+    } catch (error) {
+      console.error("Error creating account:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if an account with the given ID exists
+   */
+  async accountExists(accountId: string): Promise<boolean> {
+    try {
+      if (!this.sheets) await this.initialize();
+
+      const accounts = await this.getAccounts();
+      return accounts.some((account: any) => account.id === accountId);
+    } catch (error) {
+      console.error("Error checking if account exists:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Get all supported currencies from existing accounts
+   */
+  async getSupportedCurrencies(): Promise<string[]> {
+    try {
+      if (!this.sheets) await this.initialize();
+
+      const accounts = await this.getAccounts();
+      const currencies: string[] = accounts.map(
+        (account: any) => account.currency as string
+      );
+      return Array.from(new Set(currencies)); // Remove duplicates
+    } catch (error) {
+      console.error("Error getting supported currencies:", error);
+      return ["USD", "EUR"]; // Fallback to defaults
+    }
+  }
+
+  /**
+   * Check if a currency is supported (has at least one account)
+   */
+  async isCurrencySupported(currency: string): Promise<boolean> {
+    try {
+      if (!this.sheets) await this.initialize();
+
+      const supportedCurrencies = await this.getSupportedCurrencies();
+      return supportedCurrencies.includes(currency.toUpperCase());
+    } catch (error) {
+      console.error("Error checking currency support:", error);
+      return ["USD", "EUR"].includes(currency.toUpperCase());
+    }
+  }
+
+  /**
+   * Validate extracted currency and return validation result
+   */
+  async validateCurrency(extractedCurrency: string): Promise<{
+    isValid: boolean;
+    currency: string;
+    warning?: string;
+    supportedCurrencies: string[];
+  }> {
+    try {
+      if (!this.sheets) await this.initialize();
+
+      const supportedCurrencies = await this.getSupportedCurrencies();
+
+      if (!extractedCurrency || extractedCurrency.trim() === "") {
+        // No currency extracted, use default
+        const defaultCurrency = await this.getDefaultCurrency();
+        return {
+          isValid: true,
+          currency: defaultCurrency,
+          supportedCurrencies,
+        };
+      }
+
+      const normalizedCurrency = extractedCurrency.toUpperCase();
+      const isSupported = supportedCurrencies.includes(normalizedCurrency);
+
+      if (isSupported) {
+        return {
+          isValid: true,
+          currency: normalizedCurrency,
+          supportedCurrencies,
+        };
+      } else {
+        // Fall back to default currency instead of using unsupported currency
+        const defaultCurrency = await this.getDefaultCurrency();
+        return {
+          isValid: false,
+          currency: defaultCurrency,
+          warning: `Currency "${normalizedCurrency}" not recognized. Using default account. Supported currencies: ${supportedCurrencies.join(
+            ", "
+          )}.`,
+          supportedCurrencies,
+        };
+      }
+    } catch (error) {
+      console.error("Error validating currency:", error);
+      const defaultCurrency = await this.getDefaultCurrency();
+      return {
+        isValid: true,
+        currency: defaultCurrency,
+        supportedCurrencies: ["USD", "EUR"],
+      };
+    }
+  }
+
+  /**
+   * Validate that account and category IDs exist in Google Sheets
+   */
+  async validateBillData(billDetail: any): Promise<{
+    isValid: boolean;
+    errors: string[];
+    correctedData: any;
+  }> {
+    try {
+      if (!this.sheets) await this.initialize();
+
+      const errors: string[] = [];
+      const correctedData = { ...billDetail };
+
+      // Get available accounts and categories
+      const [accounts, categories] = await Promise.all([
+        this.getAccounts(),
+        this.getCategories(),
+      ]);
+
+      // Validate account
+      if (billDetail.account) {
+        const accountExists = accounts.some(
+          (acc: any) => acc.id === billDetail.account
+        );
+        if (!accountExists) {
+          errors.push(
+            `Account "${
+              billDetail.account
+            }" not found. Available accounts: ${accounts
+              .map((acc: any) => acc.id)
+              .join(", ")}`
+          );
+          // Remove invalid account
+          delete correctedData.account;
+        }
+      }
+
+      // Validate category
+      if (billDetail.category) {
+        const categoryExists = categories.some(
+          (cat: any) => cat.id === billDetail.category
+        );
+        if (!categoryExists) {
+          errors.push(
+            `Category "${
+              billDetail.category
+            }" not found. Available categories: ${categories
+              .map((cat: any) => cat.id)
+              .join(", ")}`
+          );
+          // Remove invalid category
+          delete correctedData.category;
+        }
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors,
+        correctedData,
+      };
+    } catch (error) {
+      console.error("Error validating bill data:", error);
+      return {
+        isValid: false,
+        errors: ["Failed to validate against Google Sheets"],
+        correctedData: billDetail,
+      };
     }
   }
 }

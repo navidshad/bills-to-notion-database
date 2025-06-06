@@ -15,8 +15,35 @@ const llm = new ChatOpenAI({
 });
 
 export const generateBillInfo = async (
-  billDetail: string
+  billDetail: string,
+  supportedCurrencies?: string[],
+  availableAccounts?: any[],
+  availableCategories?: any[]
 ): Promise<BillRecord> => {
+  const currencyHint = supportedCurrencies
+    ? `\n\nNOTE: User has accounts in these currencies: ${supportedCurrencies.join(
+        ", "
+      )}. If you detect a different currency, extract it exactly as written.`
+    : "";
+
+  const accountsHint =
+    availableAccounts && availableAccounts.length > 0
+      ? `\n\nAVAILABLE ACCOUNTS: You MUST use ONLY these account IDs: ${availableAccounts
+          .map((acc) => `"${acc.id}" (${acc.name} - ${acc.currency})`)
+          .join(
+            ", "
+          )}. If you cannot determine which account fits, leave account field empty.`
+      : "";
+
+  const categoriesHint =
+    availableCategories && availableCategories.length > 0
+      ? `\n\nAVAILABLE CATEGORIES: You MUST use ONLY these category IDs: ${availableCategories
+          .map((cat) => `"${cat.id}" (${cat.name})`)
+          .join(
+            ", "
+          )}. If you cannot determine which category fits, leave category field empty.`
+      : "";
+
   const chatTemplate = ChatPromptTemplate.fromMessages([
     ["user", "Bill: {billDetail}"],
     [
@@ -26,6 +53,17 @@ export const generateBillInfo = async (
     [
       "user",
       "please use a valid ISO 8601 for date, message date is {msg_date}",
+    ],
+    [
+      "user",
+      "CURRENCY EXTRACTION: Look carefully for currency codes (USD, EUR, GBP, GEL, etc.) or currency symbols ($, €, £, ლ, etc.) in the text. Extract the exact 3-letter ISO currency code. If no currency is found, leave currency_code as empty string." +
+        currencyHint,
+    ],
+    [
+      "user",
+      "ACCOUNTS & CATEGORIES: Use ONLY the provided account and category IDs. Do NOT make up names." +
+        accountsHint +
+        categoriesHint,
     ],
     ["system", "JSON result is:"],
   ]);

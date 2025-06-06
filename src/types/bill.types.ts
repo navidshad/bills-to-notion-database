@@ -14,8 +14,7 @@ export const billRecordSchema = z.object({
   total_price: z.number(),
   currency_code: z.string({
     description:
-      "if didn't provide, default is " +
-      (process.env.DEFAULT_CURRENCY || "USD"),
+      "3-letter ISO currency code (e.g., USD, EUR, GBP, JPY, GEL, etc.). IMPORTANT: Extract exact currency mentioned in text. If no currency found, leave empty string.",
   }),
   date: z.date({ description: "if not provided, use message date" }),
   description: z.string(),

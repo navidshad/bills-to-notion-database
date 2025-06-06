@@ -22,7 +22,6 @@ export interface EnvironmentConfig {
   DATABASE_ID?: string;
 
   // App Settings
-  DEFAULT_CURRENCY?: Currency;
   NODE_ENV?: "development" | "production" | "test";
 }
 

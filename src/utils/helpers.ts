@@ -2,6 +2,11 @@
  * Utility functions for the Telegram bot
  */
 
+import {
+  CallbackActions,
+  CallbackDataGenerator,
+} from "../types/callback.types";
+
 /**
  * Edit a Telegram message (either text or caption)
  * @param {Object} params - Parameters object
@@ -43,11 +48,15 @@ const BILL_REPLY_MARKUP = {
     [
       {
         text: "Re Calculate",
-        callback_data: "re-calculate",
+        callback_data: CallbackDataGenerator.forAction(
+          CallbackActions.RE_CALCULATE
+        ),
       },
       {
         text: "Add to Database",
-        callback_data: "add-to-database",
+        callback_data: CallbackDataGenerator.forAction(
+          CallbackActions.ADD_TO_DATABASE
+        ),
       },
     ],
   ],

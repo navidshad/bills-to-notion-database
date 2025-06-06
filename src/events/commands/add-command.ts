@@ -7,6 +7,7 @@ import { getReceiptDetail } from "../../utils/receipt-processor";
 import * as textChain from "../../text-chain";
 import { createExpenseKeyboard } from "../../keyboards/bill-keyboards";
 import IDManager from "../../managers/id-manager";
+import GoogleSheetsAdapter from "../../adapters/google-sheets";
 
 /**
  * Register /add command
@@ -33,6 +34,48 @@ function registerAddCommand(bot: any) {
       // Extract receipt data
       const billDetail = await getReceiptDetail(imageId, msg.caption, bot);
 
+      // Validate bill data (account and category existence)
+      const validation = await GoogleSheetsAdapter.validateBillData(billDetail);
+
+      // Use corrected data (removes invalid accounts/categories)
+      const validatedBillDetail = validation.correctedData;
+
+      // Validate currency and get warnings with fallback
+      let currencyValidation: {
+        isValid: boolean;
+        currency: string;
+        warning?: string;
+        supportedCurrencies: string[];
+      } = {
+        isValid: true,
+        currency: validatedBillDetail.currency_code || "USD",
+        supportedCurrencies: ["USD", "EUR"],
+      };
+
+      try {
+        currencyValidation = await GoogleSheetsAdapter.validateCurrency(
+          validatedBillDetail.currency_code
+        );
+        // Use validated currency
+        validatedBillDetail.currency_code = currencyValidation.currency;
+      } catch (error) {
+        console.warn(
+          "Failed to validate currency for photo, using extracted value:",
+          error
+        );
+        // Use extracted currency or default to USD
+        validatedBillDetail.currency_code =
+          validatedBillDetail.currency_code || "USD";
+      }
+
+      // Add validation errors to warning if any
+      if (!validation.isValid) {
+        const validationWarning = validation.errors.join(". ");
+        currencyValidation.warning = currencyValidation.warning
+          ? `${currencyValidation.warning} ${validationWarning}`
+          : validationWarning;
+      }
+
       // Generate sequential numeric transaction ID starting from 100
       const transactionId = await IDManager.generateTransactionID();
 
@@ -40,9 +83,13 @@ function registerAddCommand(bot: any) {
       const transactionMessage = formatTransactionMessage(
         "expense",
         transactionId,
-        billDetail
+        validatedBillDetail,
+        currencyValidation.warning
       );
-      const keyboard = createExpenseKeyboard(transactionId, billDetail);
+      const keyboard = createExpenseKeyboard(
+        transactionId,
+        validatedBillDetail
+      );
 
       // Update the message with transaction details and keyboard
       bot.editMessageCaption(transactionMessage, {
@@ -74,7 +121,73 @@ function registerAddCommand(bot: any) {
       );
 
       if (intent === "add-bill") {
-        const billDetail = await textChain.generateBillInfo(description);
+        // Get supported currencies for AI hint with fallback
+        let supportedCurrencies: string[] = ["USD", "EUR"];
+        let currencyValidation: {
+          isValid: boolean;
+          currency: string;
+          warning?: string;
+          supportedCurrencies: string[];
+        } = {
+          isValid: true,
+          currency: "USD",
+          supportedCurrencies: ["USD", "EUR"],
+        };
+
+        let availableAccounts: any[] = [];
+        let availableCategories: any[] = [];
+
+        try {
+          supportedCurrencies =
+            await GoogleSheetsAdapter.getSupportedCurrencies();
+          availableAccounts = await GoogleSheetsAdapter.getAccounts();
+          availableCategories = await GoogleSheetsAdapter.getCategories();
+        } catch (error) {
+          console.warn(
+            "Failed to get data from Google Sheets, using defaults:",
+            error
+          );
+        }
+
+        const billDetail = await textChain.generateBillInfo(
+          description,
+          supportedCurrencies,
+          availableAccounts,
+          availableCategories
+        );
+
+        // Validate bill data (account and category existence)
+        const validation = await GoogleSheetsAdapter.validateBillData(
+          billDetail
+        );
+
+        // Use corrected data (removes invalid accounts/categories)
+        const validatedBillDetail = validation.correctedData;
+
+        // Validate currency and get warnings with fallback
+        try {
+          currencyValidation = await GoogleSheetsAdapter.validateCurrency(
+            validatedBillDetail.currency_code
+          );
+          // Use validated currency
+          validatedBillDetail.currency_code = currencyValidation.currency;
+        } catch (error) {
+          console.warn(
+            "Failed to validate currency, using extracted value:",
+            error
+          );
+          // Use extracted currency or default to USD
+          validatedBillDetail.currency_code =
+            validatedBillDetail.currency_code || "USD";
+        }
+
+        // Add validation errors to warning if any
+        if (!validation.isValid) {
+          const validationWarning = validation.errors.join(". ");
+          currencyValidation.warning = currencyValidation.warning
+            ? `${currencyValidation.warning} ${validationWarning}`
+            : validationWarning;
+        }
 
         // Generate sequential numeric transaction ID starting from 100
         const transactionId = await IDManager.generateTransactionID();
@@ -83,9 +196,13 @@ function registerAddCommand(bot: any) {
         const transactionMessage = formatTransactionMessage(
           "expense",
           transactionId,
-          billDetail
+          validatedBillDetail,
+          currencyValidation.warning
         );
-        const keyboard = createExpenseKeyboard(transactionId, billDetail);
+        const keyboard = createExpenseKeyboard(
+          transactionId,
+          validatedBillDetail
+        );
 
         // Update the message with transaction details and keyboard
         bot.editMessageText(transactionMessage, {
@@ -119,15 +236,21 @@ function registerAddCommand(bot: any) {
 function formatTransactionMessage(
   type: string,
   transactionId: number,
-  billDetail: any
+  billDetail: any,
+  warning?: string
 ): string {
   const typeEmoji = getTransactionTypeEmoji(type);
   const typeName = getTransactionTypeName(type);
 
-  return `💰 Amount: $${billDetail.total_price || billDetail.amount || "25.50"}
+  const currencySymbol = getCurrencySymbol(billDetail.currency_code);
+  const warningText = warning ? `\n\n⚠️ ${warning}` : "";
+
+  return `💰 Amount: ${currencySymbol}${
+    billDetail.total_price || billDetail.amount || "25.50"
+  }
 📅 Date: ${formatDate(billDetail.date)}
 📂 Category: ${billDetail.category || "Other"}
-💳 Account: ${billDetail.account || "Main Card"}
+💳 Account: ${billDetail.account || "Main Card"}${warningText}
 
 ---
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
@@ -163,6 +286,22 @@ function getTransactionTypeName(type: string): string {
     debt_received: "Debt Received",
   };
   return names[type] || "Expense";
+}
+
+/**
+ * Get currency symbol for display
+ */
+function getCurrencySymbol(currencyCode: string): string {
+  const symbols: Record<string, string> = {
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    GEL: "₾",
+    CAD: "C$",
+    AUD: "A$",
+  };
+  return symbols[currencyCode] || currencyCode + " ";
 }
 
 /**

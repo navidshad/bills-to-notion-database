@@ -16,6 +16,12 @@ import {
   createAccountKeyboard,
   handlePlaceholderButton,
 } from "../keyboards/bill-keyboards";
+import {
+  CallbackActions,
+  CallbackDataParser,
+  PLACEHOLDER_FEATURES,
+  isPlaceholderFeature,
+} from "../types/callback.types";
 
 /**
  * Format transaction message with details for display
@@ -23,7 +29,8 @@ import {
 function formatTransactionMessage(
   type: string,
   transactionId: number,
-  transactionData: any
+  transactionData: any,
+  warning?: string
 ): string {
   const typeEmoji = getTransactionTypeEmoji(type);
   const typeName = getTransactionTypeName(type);
@@ -32,14 +39,36 @@ function formatTransactionMessage(
   const date = formatDate(transactionData?.date);
   const category = transactionData?.category || "Other";
   const account = transactionData?.account || "Main Card";
+  const currencySymbol = getCurrencySymbol(
+    transactionData?.currency_code || "USD"
+  );
 
-  return `💰 Amount: $${amount}
+  // Only show warning if provided (no warning means currency is supported)
+  const warningText = warning ? `\n\n⚠️ ${warning}` : "";
+
+  return `💰 Amount: ${currencySymbol}${amount}
 📅 Date: ${date}
 📂 Category: ${category}
-💳 Account: ${account}
+💳 Account: ${account}${warningText}
 
 ---
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
+}
+
+/**
+ * Get currency symbol for display
+ */
+function getCurrencySymbol(currencyCode: string): string {
+  const symbols: Record<string, string> = {
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    GEL: "₾",
+    CAD: "C$",
+    AUD: "A$",
+  };
+  return symbols[currencyCode] || currencyCode + " ";
 }
 
 /**
@@ -93,36 +122,7 @@ function registerCallbackHandler(bot: any) {
     const chatId = message.chat.id;
 
     // Handle placeholder buttons (non-implemented features)
-    const placeholderFeatures = [
-      // Phase 3 features
-      "edit_amount",
-      "edit_date",
-      "edit_details",
-      "new_category",
-      "new_account",
-      "submit",
-
-      // Phase 4 features
-      "edit_from",
-      "edit_to",
-      "edit_exchange",
-      "edit_source",
-
-      // Phase 5 features
-      "edit_contact",
-      "edit_purpose",
-      "debt_payment",
-
-      // Phase 6 features
-      "analytics",
-      "export",
-      "recurring",
-      "notifications",
-    ];
-
-    if (
-      placeholderFeatures.some((feature) => callback_data.includes(feature))
-    ) {
+    if (isPlaceholderFeature(callback_data)) {
       const placeholderMessage = handlePlaceholderButton(callback_data);
 
       // Send temporary notification message with phase information
@@ -145,9 +145,14 @@ function registerCallbackHandler(bot: any) {
     }
 
     // Handle copy ID functionality
-    if (callback_data.startsWith("copy_id_")) {
-      const transactionIdMatch = callback_data.match(/copy_id_(\d+)$/);
-      const transactionId = transactionIdMatch ? transactionIdMatch[1] : null;
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.COPY_ID
+      )
+    ) {
+      const transactionId =
+        CallbackDataParser.extractTransactionId(callback_data);
 
       if (transactionId) {
         // Send a message with the copyable transaction ID
@@ -170,13 +175,17 @@ function registerCallbackHandler(bot: any) {
     }
 
     // Extract transaction ID from callback data
-    const transactionIdMatch = callback_data.match(/_(\d+)$/);
-    const transactionId = transactionIdMatch
-      ? parseInt(transactionIdMatch[1])
-      : null;
+    const transactionId =
+      CallbackDataParser.extractTransactionId(callback_data);
 
     // Handle keyboard navigation
-    if (callback_data.startsWith("edit_type_") && transactionId) {
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_TYPE
+      ) &&
+      transactionId
+    ) {
       const keyboard = createTransactionTypeKeyboard(transactionId);
       const messageText = `🔄 Change Transaction Type for #${transactionId}`;
 
@@ -190,7 +199,13 @@ function registerCallbackHandler(bot: any) {
       return;
     }
 
-    if (callback_data.startsWith("edit_category_") && transactionId) {
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_CATEGORY
+      ) &&
+      transactionId
+    ) {
       const keyboard = await createCategoryKeyboard(transactionId);
       const messageText = `📂 Select Category for Transaction #${transactionId}`;
 
@@ -204,9 +219,23 @@ function registerCallbackHandler(bot: any) {
       return;
     }
 
-    if (callback_data.startsWith("edit_account_") && transactionId) {
-      const keyboard = await createAccountKeyboard(transactionId);
-      const messageText = `💳 Select Account for Transaction #${transactionId}`;
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_ACCOUNT
+      ) &&
+      transactionId
+    ) {
+      // Extract currency from callback data if present
+      const currency = CallbackDataParser.extractCurrency(callback_data);
+
+      const keyboard = await createAccountKeyboard(
+        transactionId,
+        currency || undefined
+      );
+      const messageText = currency
+        ? `💳 Select ${currency} Account for Transaction #${transactionId}`
+        : `💳 Select Account for Transaction #${transactionId}`;
 
       bot.editMessageText(messageText, {
         chat_id: chatId,
@@ -219,9 +248,16 @@ function registerCallbackHandler(bot: any) {
     }
 
     // Handle category selections
-    if (callback_data.startsWith("cat_") && transactionId) {
-      const categoryParts = callback_data.split("_");
-      const categoryId = categoryParts.slice(1, -1).join("_"); // Remove "cat_" and transaction ID
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.CATEGORY_SELECT
+      ) &&
+      transactionId
+    ) {
+      const categoryId = CallbackDataParser.extractCategoryId(callback_data);
+      if (!categoryId) return;
+
       const categoryName = await getCategoryName(categoryId);
 
       // TODO: Update transaction data with new category
@@ -248,22 +284,70 @@ function registerCallbackHandler(bot: any) {
     }
 
     // Handle account selections
-    if (callback_data.startsWith("acc_") && transactionId) {
-      // Extract account key by removing "acc_" prefix and transaction ID suffix
-      const parts = callback_data.split("_");
-      // Remove first part ("acc") and last part (transaction ID)
-      const accountParts = parts.slice(1, -1);
-      const accountId = accountParts.join("_"); // Use underscore for IDs
-      const accountName = await getAccountName(accountId);
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.ACCOUNT_SELECT
+      ) &&
+      transactionId
+    ) {
+      const accountId = CallbackDataParser.extractAccountId(callback_data);
+      if (!accountId) return;
+
+      // Check if this is a temporary account
+      const isTemporary = accountId.startsWith("temp_cash_");
+      let accountName: string;
+
+      if (isTemporary) {
+        // Extract currency from temp account ID (e.g., temp_cash_eur -> EUR)
+        const currency = accountId.replace("temp_cash_", "").toUpperCase();
+        accountName = `Cash (${currency})`;
+
+        // Create the account in Google Sheets
+        try {
+          await googleSheetsAdapter.createAccount(
+            accountId,
+            accountName,
+            "💰",
+            currency,
+            `Cash account for ${currency} transactions`
+          );
+          console.log(`Created temporary account: ${accountName}`);
+        } catch (error) {
+          console.error("Error creating temporary account:", error);
+        }
+      } else {
+        accountName = await getAccountName(accountId);
+      }
 
       // TODO: Update transaction data with new account
       // For now, show success message and return to main keyboard
       bot.answerCallbackQuery(query.id, {
-        text: `Account changed to ${accountName}`,
+        text: isTemporary
+          ? `Account "${accountName}" created and selected`
+          : `Account changed to ${accountName}`,
       });
 
-      // Return to main transaction keyboard with updated account
-      const transactionData = { account: accountName };
+      // Get account details to extract currency
+      let accountCurrency = "USD"; // Default fallback
+      try {
+        const accounts = await googleSheetsAdapter.getAccounts();
+        const selectedAccount = accounts.find(
+          (acc: any) => acc.id === accountId
+        );
+        if (selectedAccount) {
+          accountCurrency = selectedAccount.currency;
+        }
+      } catch (error) {
+        console.warn("Error getting account currency:", error);
+      }
+
+      // Re-validate currency based on selected account to clear warnings if supported
+      const transactionData = {
+        account: accountName,
+        currency_code: accountCurrency,
+      };
+
       const keyboard = createExpenseKeyboard(transactionId, transactionData);
       const messageText = formatTransactionMessage(
         "expense",
@@ -280,9 +364,51 @@ function registerCallbackHandler(bot: any) {
     }
 
     // Handle transaction type selections
-    if (callback_data.startsWith("type_") && transactionId) {
-      const typeMatch = callback_data.match(/^type_([^_]+)_/);
-      const selectedType = typeMatch ? typeMatch[1] : "expense";
+    if (
+      transactionId &&
+      (CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.TYPE_EXPENSE
+      ) ||
+        CallbackDataParser.startsWithAction(
+          callback_data,
+          CallbackActions.TYPE_INCOME
+        ) ||
+        CallbackDataParser.startsWithAction(
+          callback_data,
+          CallbackActions.TYPE_TRANSFER
+        ) ||
+        CallbackDataParser.startsWithAction(
+          callback_data,
+          CallbackActions.TYPE_LEND
+        ) ||
+        CallbackDataParser.startsWithAction(
+          callback_data,
+          CallbackActions.TYPE_BORROW
+        ) ||
+        CallbackDataParser.startsWithAction(
+          callback_data,
+          CallbackActions.TYPE_DEBT_PAYMENT
+        ) ||
+        CallbackDataParser.startsWithAction(
+          callback_data,
+          CallbackActions.TYPE_DEBT_RECEIVED
+        ))
+    ) {
+      const action = CallbackDataParser.extractAction(callback_data);
+
+      // Map callback actions to transaction types
+      const typeMap = {
+        [CallbackActions.TYPE_EXPENSE]: "expense",
+        [CallbackActions.TYPE_INCOME]: "income",
+        [CallbackActions.TYPE_TRANSFER]: "transfer",
+        [CallbackActions.TYPE_LEND]: "lend",
+        [CallbackActions.TYPE_BORROW]: "borrow",
+        [CallbackActions.TYPE_DEBT_PAYMENT]: "debt_payment",
+        [CallbackActions.TYPE_DEBT_RECEIVED]: "debt_received",
+      };
+
+      const selectedType = typeMap[action as keyof typeof typeMap] || "expense";
 
       // Get the appropriate keyboard and message for the selected type
       let keyboard;
@@ -351,7 +477,13 @@ function registerCallbackHandler(bot: any) {
     }
 
     // Handle cancel button - show confirmation
-    if (callback_data.startsWith("cancel_") && transactionId) {
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.CANCEL
+      ) &&
+      transactionId
+    ) {
       const keyboard = createCancelConfirmationKeyboard(transactionId);
       const messageText = `⚠️ Cancel Transaction #${transactionId}?
       
@@ -371,7 +503,13 @@ MENU: Cancellation Confirmation 👇`;
     }
 
     // Handle cancel confirmation
-    if (callback_data.startsWith("confirm_cancel_") && transactionId) {
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.CONFIRM_CANCEL
+      ) &&
+      transactionId
+    ) {
       // TODO: In Phase 3, remove from TempBills sheet
       // For now, just delete the message
 
@@ -393,7 +531,13 @@ MENU: Cancellation Confirmation 👇`;
     }
 
     // Handle back to transaction navigation
-    if (callback_data.startsWith("back_transaction_") && transactionId) {
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.BACK_TRANSACTION
+      ) &&
+      transactionId
+    ) {
       // Return to main transaction keyboard
       const transactionData = {};
       const keyboard = createExpenseKeyboard(transactionId, transactionData);
@@ -417,7 +561,7 @@ MENU: Cancellation Confirmation 👇`;
     //
     // Recalculate the bill
     //
-    if (query.data === "re-calculate" && query.message) {
+    if (query.data === CallbackActions.RE_CALCULATE && query.message) {
       if (query.message.photo) {
         editTextMessage(
           {
@@ -451,7 +595,37 @@ MENU: Cancellation Confirmation 👇`;
           bot
         );
 
-        const billDetail = await textChain.generateBillInfo(query.message.text);
+        // Get supported currencies, accounts, and categories for AI hint
+        let supportedCurrencies: string[] = ["USD", "EUR"];
+        let availableAccounts: any[] = [];
+        let availableCategories: any[] = [];
+
+        try {
+          supportedCurrencies =
+            await googleSheetsAdapter.getSupportedCurrencies();
+          availableAccounts = await googleSheetsAdapter.getAccounts();
+          availableCategories = await googleSheetsAdapter.getCategories();
+        } catch (error) {
+          console.warn(
+            "Failed to get data from Google Sheets for callback:",
+            error
+          );
+        }
+
+        const billDetail = await textChain.generateBillInfo(
+          query.message.text,
+          supportedCurrencies,
+          availableAccounts,
+          availableCategories
+        );
+
+        // Validate currency and get warnings
+        const currencyValidation = await googleSheetsAdapter.validateCurrency(
+          billDetail.currency_code
+        );
+
+        // Use validated currency
+        billDetail.currency_code = currencyValidation.currency;
 
         editTextMessage(
           {
@@ -469,7 +643,7 @@ MENU: Cancellation Confirmation 👇`;
     //
     // Add to database
     //
-    if (query.data === "add-to-database" && query.message) {
+    if (query.data === CallbackActions.ADD_TO_DATABASE && query.message) {
       const stringData = query.message.caption || query.message.text;
       // remove inline keyboard
       editTextMessage(
