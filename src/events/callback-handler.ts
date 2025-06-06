@@ -432,6 +432,8 @@ function registerCallbackHandler(bot: any) {
           callback_data,
           CallbackActions.TYPE_TRANSFER
         ) ||
+        // PHASE 5: Debt transaction types disabled until proper implementation
+        /*
         CallbackDataParser.startsWithAction(
           callback_data,
           CallbackActions.TYPE_LEND
@@ -447,7 +449,9 @@ function registerCallbackHandler(bot: any) {
         CallbackDataParser.startsWithAction(
           callback_data,
           CallbackActions.TYPE_DEBT_RECEIVED
-        ))
+        ) ||
+        */
+        false)
     ) {
       const action = CallbackDataParser.extractAction(callback_data);
 
@@ -456,10 +460,13 @@ function registerCallbackHandler(bot: any) {
         [CallbackActions.TYPE_EXPENSE]: "expense",
         [CallbackActions.TYPE_INCOME]: "income",
         [CallbackActions.TYPE_TRANSFER]: "transfer",
+        // PHASE 5: Debt types disabled until proper implementation
+        /*
         [CallbackActions.TYPE_LEND]: "lend",
         [CallbackActions.TYPE_BORROW]: "borrow",
         [CallbackActions.TYPE_DEBT_PAYMENT]: "debt_payment",
         [CallbackActions.TYPE_DEBT_RECEIVED]: "debt_received",
+        */
       };
 
       const selectedType = typeMap[action as keyof typeof typeMap] || "expense";
@@ -508,30 +515,31 @@ function registerCallbackHandler(bot: any) {
           typeEmoji = "🔄";
           typeName = "Transfer";
           break;
+        // PHASE 5 FEATURES - Debt Management (Not yet implemented)
+        // TODO: Implement proper debt management keyboards in Phase 5
+        // These transaction types currently disabled until proper implementation
+        /*
         case "lend":
-          // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = createLendKeyboard(transactionId, transactionData);
           typeEmoji = "🤝";
           typeName = "Lend Money";
           break;
         case "borrow":
-          // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = createBorrowKeyboard(transactionId, transactionData);
           typeEmoji = "🙏";
           typeName = "Borrow Money";
           break;
         case "debt_payment":
-          // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = createDebtPaymentKeyboard(transactionId, transactionData);
           typeEmoji = "💳";
           typeName = "Debt Payment";
           break;
         case "debt_received":
-          // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = createDebtReceivedKeyboard(transactionId, transactionData);
           typeEmoji = "💵";
           typeName = "Debt Received";
           break;
+        */
         default: // expense
           keyboard = createExpenseKeyboard(transactionId, transactionData);
           typeEmoji = "💸";

@@ -334,6 +334,8 @@ function createTransactionTypeKeyboard(transactionId: number) {
             transactionId
           ),
         },
+        // PHASE 5: Debt transaction type buttons disabled until proper implementation
+        /*
         {
           text: "🤝 Lend Money",
           callback_data: CallbackDataGenerator.forTransaction(
@@ -341,32 +343,36 @@ function createTransactionTypeKeyboard(transactionId: number) {
             transactionId
           ),
         },
+        */
       ],
-      [
-        {
-          text: "🙏 Borrow",
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.TYPE_BORROW,
-            transactionId
-          ),
-        },
-        {
-          text: "💳 Debt Payment",
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.TYPE_DEBT_PAYMENT,
-            transactionId
-          ),
-        },
-      ],
-      [
-        {
-          text: "💵 Debt Received",
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.TYPE_DEBT_RECEIVED,
-            transactionId
-          ),
-        },
-      ],
+      // PHASE 5: Debt transaction rows commented out until proper implementation
+      /*
+        [
+          {
+            text: "🙏 Borrow",
+            callback_data: CallbackDataGenerator.forTransaction(
+              CallbackActions.TYPE_BORROW,
+              transactionId
+            ),
+          },
+          {
+            text: "💳 Debt Payment",
+            callback_data: CallbackDataGenerator.forTransaction(
+              CallbackActions.TYPE_DEBT_PAYMENT,
+              transactionId
+            ),
+          },
+        ],
+        [
+          {
+            text: "💵 Debt Received",
+            callback_data: CallbackDataGenerator.forTransaction(
+              CallbackActions.TYPE_DEBT_RECEIVED,
+              transactionId
+            ),
+          },
+        ],
+        */
       [
         {
           text: "← Back to Transaction",
@@ -624,6 +630,19 @@ const PLACEHOLDER_MESSAGES = {
 
   debt_payment:
     "💳 **Phase 5 Feature**\n\nDebt payment tracking coming in Phase 5!\n\nUpcoming:\n• Track payments to/from friends & family\n• Payment history and balance management\n• Interest calculations",
+
+  // Debt transaction types
+  type_lend:
+    "🤝 **Phase 5 Feature**\n\nLend Money transactions coming in Phase 5!\n\nUpcoming:\n• Track money lent to friends & family\n• Contact management system\n• Lending history and balance tracking\n• Payment reminders and notifications",
+
+  type_borrow:
+    "🙏 **Phase 5 Feature**\n\nBorrow Money transactions coming in Phase 5!\n\nUpcoming:\n• Track money borrowed from others\n• Debt management system\n• Payment schedules and reminders\n• Interest calculation support",
+
+  type_debt_payment:
+    "💳 **Phase 5 Feature**\n\nDebt Payment transactions coming in Phase 5!\n\nUpcoming:\n• Track payments for existing debts\n• Automatic balance updates\n• Payment history management\n• Integration with lending system",
+
+  type_debt_received:
+    "💵 **Phase 5 Feature**\n\nDebt Received transactions coming in Phase 5!\n\nUpcoming:\n• Track payments received from debtors\n• Automatic balance updates\n• Payment history tracking\n• Lending relationship management",
 
   // Phase 6 features - Advanced & Polish
   analytics:

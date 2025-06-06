@@ -66,10 +66,11 @@ export const IMPLEMENTED_HANDLERS = [
   CallbackActions.TYPE_EXPENSE,
   CallbackActions.TYPE_INCOME,
   CallbackActions.TYPE_TRANSFER,
-  CallbackActions.TYPE_LEND,
-  CallbackActions.TYPE_BORROW,
-  CallbackActions.TYPE_DEBT_PAYMENT,
-  CallbackActions.TYPE_DEBT_RECEIVED,
+  // PHASE 5: Debt transaction types moved to placeholders until proper implementation
+  // CallbackActions.TYPE_LEND,
+  // CallbackActions.TYPE_BORROW,
+  // CallbackActions.TYPE_DEBT_PAYMENT,
+  // CallbackActions.TYPE_DEBT_RECEIVED,
   CallbackActions.COPY_ID,
   CallbackActions.CANCEL,
   CallbackActions.CONFIRM_CANCEL,
@@ -100,6 +101,10 @@ export const PLACEHOLDER_HANDLERS = [
   // Phase 5 features
   CallbackActions.EDIT_CONTACT,
   CallbackActions.EDIT_PURPOSE,
+  CallbackActions.TYPE_LEND,
+  CallbackActions.TYPE_BORROW,
+  CallbackActions.TYPE_DEBT_PAYMENT,
+  CallbackActions.TYPE_DEBT_RECEIVED,
 
   // Phase 6 features
   CallbackActions.ANALYTICS,
@@ -174,10 +179,11 @@ export const PHASE_MAPPING = {
     CallbackActions.TYPE_EXPENSE,
     CallbackActions.TYPE_INCOME,
     CallbackActions.TYPE_TRANSFER,
-    CallbackActions.TYPE_LEND,
-    CallbackActions.TYPE_BORROW,
-    CallbackActions.TYPE_DEBT_PAYMENT,
-    CallbackActions.TYPE_DEBT_RECEIVED,
+    // PHASE 5: Debt transaction types moved to Phase 5
+    // CallbackActions.TYPE_LEND,
+    // CallbackActions.TYPE_BORROW,
+    // CallbackActions.TYPE_DEBT_PAYMENT,
+    // CallbackActions.TYPE_DEBT_RECEIVED,
     CallbackActions.COPY_ID,
     CallbackActions.CANCEL,
     CallbackActions.CONFIRM_CANCEL,
@@ -206,7 +212,14 @@ export const PHASE_MAPPING = {
   ],
 
   // Phase 5 - Debt Management
-  phase5: [CallbackActions.EDIT_CONTACT, CallbackActions.EDIT_PURPOSE],
+  phase5: [
+    CallbackActions.EDIT_CONTACT,
+    CallbackActions.EDIT_PURPOSE,
+    CallbackActions.TYPE_LEND,
+    CallbackActions.TYPE_BORROW,
+    CallbackActions.TYPE_DEBT_PAYMENT,
+    CallbackActions.TYPE_DEBT_RECEIVED,
+  ],
 
   // Phase 6 - Advanced Features
   phase6: [
