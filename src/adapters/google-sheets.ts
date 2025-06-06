@@ -366,62 +366,7 @@ class GoogleSheetsAdapter {
     } catch (error) {
       console.error("Error getting categories from Google Sheets:", error);
       // Fallback to default categories
-      return [
-        {
-          id: "food",
-          name: "Food",
-          emoji: "🍕",
-          description: "Restaurants, groceries, takeout",
-        },
-        {
-          id: "transport",
-          name: "Transport",
-          emoji: "🚗",
-          description: "Gas, public transit, rideshare",
-        },
-        {
-          id: "shopping",
-          name: "Shopping",
-          emoji: "👕",
-          description: "Clothes, electronics, general purchases",
-        },
-        {
-          id: "utilities",
-          name: "Utilities",
-          emoji: "💡",
-          description: "Electricity, water, internet, phone",
-        },
-        {
-          id: "healthcare",
-          name: "Healthcare",
-          emoji: "🏥",
-          description: "Medical bills, pharmacy, insurance",
-        },
-        {
-          id: "entertainment",
-          name: "Entertainment",
-          emoji: "🎬",
-          description: "Movies, games, subscriptions",
-        },
-        {
-          id: "housing",
-          name: "Housing",
-          emoji: "🏠",
-          description: "Rent, mortgage, maintenance",
-        },
-        {
-          id: "education",
-          name: "Education",
-          emoji: "📚",
-          description: "Books, courses, tuition",
-        },
-        {
-          id: "other",
-          name: "Other",
-          emoji: "📋",
-          description: "Miscellaneous expenses",
-        },
-      ];
+      return [];
     }
   }
 
@@ -444,36 +389,7 @@ class GoogleSheetsAdapter {
     } catch (error) {
       console.error("Error getting accounts from Google Sheets:", error);
       // Fallback to default accounts (only USD and EUR)
-      return [
-        {
-          id: "main_card",
-          name: "Main Card",
-          emoji: "💳",
-          currency: "USD",
-          description: "Primary debit/credit card",
-        },
-        {
-          id: "checking",
-          name: "Checking",
-          emoji: "🏦",
-          currency: "USD",
-          description: "Main checking account",
-        },
-        {
-          id: "euro_card",
-          name: "Euro Card",
-          emoji: "💳",
-          currency: "EUR",
-          description: "European debit/credit card",
-        },
-        {
-          id: "euro_cash",
-          name: "Euro Cash",
-          emoji: "💰",
-          currency: "EUR",
-          description: "Physical euro cash",
-        },
-      ];
+      return [];
     }
   }
 
