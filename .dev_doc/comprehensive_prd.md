@@ -36,7 +36,7 @@ Create a smart, conversational personal finance assistant that:
 - **Accounts**: Bank accounts, credit cards, cash, etc.
 - **Config**: System settings and user preferences
 - **Dashboard**: Summary metrics and insights
-- **TempBills**: Temporary storage for unconfirmed transactions [MessageID, ProcessedData, Timestamp]
+- **TempBills**: Temporary storage for unconfirmed transactions [MessageID, ProcessedData, InputMessageIDs, Timestamp]
 - **Contacts**: People you lend to/borrow from (NEW)
 - **Debts**: Active debt/credit tracking (NEW)
 - **DebtHistory**: Payment history for debts/credits (NEW)
@@ -117,6 +117,20 @@ interface DebtPayment {
   created_at: string;            // Creation timestamp
 }
 ```
+
+**TempBills Sheet Columns:**
+```typescript
+interface TempBill {
+  message_id: string;            // Telegram message ID (primary key)
+  user_id: string;               // Telegram user ID
+  transaction_data: string;      // JSON string of BillRecord data
+  input_message_ids: string;     // JSON array of message IDs for cleanup ["msg_1", "msg_2"]
+  created_at: string;            // Creation timestamp
+  updated_at: string;            // Last update timestamp
+}
+```
+
+**Input Message Tracking**: The `input_message_ids` field stores a JSON array of all temporary messages sent during input collection (prompt messages, error messages, etc.) that need to be cleaned up when the transaction is submitted or cancelled.
 
 #### 1.3 Configuration Management
 - **Authentication**: Service Account with Google Sheets API
@@ -696,100 +710,306 @@ interface Config {
 ```
 
 ## Implementation Phases
-*Each phase delivers a working, deployable version*
+*Each phase builds upon keyboard layouts as the system architecture foundation*
 
-### Phase 1: Basic Google Sheets Migration (Working Bot) ✅ COMPLETED
-**Deliverable**: Functional bot that saves bills to Google Sheets instead of Notion
+### Phase 1: Foundation & Basic Keyboards ✅ COMPLETED
+**Deliverable**: Basic bot with Google Sheets integration and simple keyboard
 
-- [x] Install googleapis dependency (`npm install googleapis`)
-- [x] Create Google Sheets adapter class (src/adapters/google-sheets.ts)
-- [x] Set up service account authentication
-- [x] Implement `/init` command - initializes required sheets in existing spreadsheet
-- [x] Replace notion-adapter with google-sheets in index.ts
-- [x] Keep existing photo/text processing logic but save to Google Sheets
-- [x] Updated `/init` to work with existing spreadsheet ID instead of creating new one
-- [x] Created SETUP.md guide for Google Sheets configuration
-- [x] Updated .gitignore to exclude service account files
-- [x] Updated package.json dependencies (removed @notionhq/client, added googleapis)
-- [x] **REFACTORING COMPLETE**: Broke down monolithic index.js into modular TypeScript structure ✅
-  - [x] Created `src/events/` directory with command and handler separation
-  - [x] Created `src/utils/` for shared functionality (helpers, receipt-processor)
-  - [x] Modular command handlers: init-command.ts, help-command.ts
-  - [x] Separated message and callback handling into dedicated files
-  - [x] Clean index.ts entry point with proper imports
-- [x] **TESTING COMPLETE**: User can send photo/text → bot processes → saves to Google Sheets ✅
-- [x] **Working Version**: Bot processes bills and saves to Google Sheets ✅
+**Keyboard Focus**: Basic confirmation keyboard for processed bills
+```
+┌─────────────────────────────────────────┐
+│ Bill: $25.50 Food from Main Card       │
+├─────────────────────────────────────────┤
+│              ✅ Save Bill               │
+└─────────────────────────────────────────┘
+```
 
-**Status**: ✅ **PHASE 1 COMPLETE** - Full Google Sheets migration + modular TypeScript refactoring successful!
+**Implementation Tasks**:
+- [x] Google Sheets adapter and authentication
+- [x] Modular TypeScript architecture (src/events/, src/utils/, etc.)
+- [x] Basic photo/text processing with AI chains
+- [x] Simple confirmation keyboard implementation
+- [x] Direct save to Bills_2024 sheet
 
-### Phase 2: Command Structure & Enhanced UI (Improved UX)
-**Deliverable**: Bot with proper commands and better keyboards
+**Status**: ✅ **COMPLETE**
 
-- [ ] Implement `/add` command handler
-- [ ] Update message processing to only work after `/add` command
-- [ ] Enhance keyboard with better layout and options
-- [ ] Update text-chain.ts with enhanced bill schema
-- [ ] Create Categories and Accounts sheets in `/init`
-- [ ] Implement category/account selection in keyboards
-- [ ] Test: `/add` + photo/text → enhanced keyboard → save to sheets
-- [ ] **Working Version**: Command-based bot with better UX
+### Phase 2: Command Structure & Primary Keyboards
+**Deliverable**: `/add` command with enhanced transaction keyboards
 
-### Phase 3: Session Management & Editing (Full CRUD)
-**Deliverable**: Users can edit bills using message IDs
+**Keyboard Focus**: Full primary keyboards for each transaction type
+```
+🎯 TARGET KEYBOARDS:
+├── 💸 Expense Keyboard (Amount, Date, Category, Account)
+├── 💰 Income Keyboard (Amount, Date, Source Account)
+└── 🔄 Transfer Keyboard (Amount, From/To Accounts, Exchange Rate)
+```
 
-- [ ] Add TempBills sheet to store unconfirmed transactions
-- [ ] Implement message ID tracking in bill schema
-- [ ] Add "Copy ID" button to keyboards
-- [ ] Implement edit functionality: "Edit bill msg_12345"
-- [ ] Add "Show pending bills" command
-- [ ] Implement submit/cancel functionality from TempBills
-- [ ] Test: Create bill → edit by ID → submit → moves to Bills_2024
-- [ ] **Working Version**: Full CRUD operations on bills
+**Implementation Tasks**:
+- [ ] Implement `/add` command handler (src/events/commands/add-command.ts)
+- [ ] Create primary keyboard layouts (src/keyboards/bill-keyboards.ts)
+- [ ] Update message processing to require `/add` command
+- [ ] Implement Categories and Accounts sheets in `/init`
+- [ ] Add keyboard callback handling (src/events/callback-handler.ts)
+- [ ] Update AI chains with enhanced bill schema
 
-### Phase 4: Transfer & Exchange Features (Financial Features)
-**Deliverable**: Complete personal finance functionality
+**Test Checklist**:
+```
+✅ Manual Test Checklist - Phase 2
+┌────────────────────────────────────────┐
+│ Test 1: Command Structure              │
+├────────────────────────────────────────┤
+│ □ Send photo without /add → Bot ignores│
+│ □ Send /add → Bot prompts for input    │
+│ □ Send /add + photo → Shows keyboard   │
+│ □ Send /add + text → Shows keyboard    │
+│                                        │
+│ Test 2: Expense Keyboard               │
+├────────────────────────────────────────┤
+│ □ All fields displayed correctly       │
+│ □ Edit buttons present for all fields  │
+│ □ Category selection shows options     │
+│ □ Account selection shows options      │
+│ □ Submit button works                  │
+│                                        │
+│ Test 3: Google Sheets Integration      │
+├────────────────────────────────────────┤
+│ □ Categories sheet has default data    │
+│ □ Accounts sheet has default data      │
+│ □ Submitted bills save to Bills_2024   │
+│ □ All required fields populated        │
+└────────────────────────────────────────┘
+```
 
+### Phase 3: Input Collection & Field Edit Keyboards
+**Deliverable**: ID-based input collection with field-specific keyboards
+
+**Keyboard Focus**: Field edit keyboards + input collection system
+```
+🎯 TARGET KEYBOARDS:
+├── 📂 Category Selection Keyboard
+├── 💳 Account Selection Keyboard  
+├── 🏷️ Transaction Type Selection Keyboard
+└── 💰 Manual Input Collection (ID-based)
+```
+
+**Implementation Tasks**:
+- [ ] Add TempBills sheet with input_message_ids tracking
+- [ ] Implement ID-based input collection system
+- [ ] Create field-specific edit keyboards
+- [ ] Add "Copy ID" buttons to primary keyboards
+- [ ] Implement message parsing for input collection
+- [ ] Add temporary message cleanup functionality
+- [ ] Create "Show pending bills" command
+
+**Test Checklist**:
+```
+✅ Manual Test Checklist - Phase 3
+┌────────────────────────────────────────┐
+│ Test 1: Input Collection System        │
+├────────────────────────────────────────┤
+│ □ Click "Edit Amount" → Button dims    │
+│ □ Bot sends input prompt with ID       │
+│ □ "Copy ID" button works correctly     │
+│ □ Send "msg_123 150.75" → Amount updates│
+│ □ Original keyboard refreshes          │
+│ □ Temp messages get cleaned up         │
+│                                        │
+│ Test 2: Field Edit Keyboards           │
+├────────────────────────────────────────┤
+│ □ Category selection shows all options │
+│ □ Account selection shows all options  │
+│ □ Transaction type selection works     │
+│ □ "New Category" creates new entry     │
+│ □ "Back" button returns to main        │
+│                                        │
+│ Test 3: Session Management             │
+├────────────────────────────────────────┤
+│ □ Multiple users can edit simultaneously│
+│ □ TempBills stores pending transactions│
+│ □ "Show pending bills" lists correctly │
+│ □ Submit moves from TempBills to Bills │
+│ □ Cancel removes from TempBills        │
+└────────────────────────────────────────┘
+```
+
+### Phase 4: Transfer & Exchange Keyboards
+**Deliverable**: Complete financial transaction keyboards
+
+**Keyboard Focus**: Transfer and currency exchange keyboards
+```
+🎯 TARGET KEYBOARDS:
+├── 🔄 Transfer Keyboard (From/To Accounts)
+├── 💱 Currency Exchange Keyboard (Rates, Multi-currency)
+└── 🧮 Calculation Keyboards (Auto-calculation features)
+```
+
+**Implementation Tasks**:
 - [ ] Add transfer transaction type support
-- [ ] Implement account-to-account transfers
-- [ ] Add currency exchange functionality
-- [ ] Update keyboards for transfer/exchange flows
+- [ ] Create transfer-specific keyboards
+- [ ] Implement currency exchange functionality
+- [ ] Add exchange rate calculation
+- [ ] Create multi-currency account selection
 - [ ] Add transfer validation logic
-- [ ] Test: Create transfers between accounts and currency exchanges
-- [ ] **Working Version**: Complete personal finance app
+- [ ] Update AI chains for transfer detection
 
-### Phase 5: Personal Debt & Credit Tracking (NEW)
-**Deliverable**: Complete debt management functionality
+**Test Checklist**:
+```
+✅ Manual Test Checklist - Phase 4
+┌────────────────────────────────────────┐
+│ Test 1: Transfer Keyboards              │
+├────────────────────────────────────────┤
+│ □ Transfer type selection works        │
+│ □ From/To account selection shows      │
+│ □ Amount field updates both accounts   │
+│ □ Transfer validation prevents errors  │
+│ □ Same-account transfer blocked        │
+│                                        │
+│ Test 2: Currency Exchange              │
+├────────────────────────────────────────┤
+│ □ Exchange rate field appears         │
+│ □ Destination amount auto-calculates  │
+│ □ Multi-currency accounts work        │
+│ □ Exchange rate validation works      │
+│ □ Both transactions recorded correctly│
+│                                        │
+│ Test 3: Financial Logic               │
+├────────────────────────────────────────┤
+│ □ Account balances update correctly   │
+│ □ Transfer appears in both accounts   │
+│ □ Currency codes properly tracked     │
+│ □ Exchange calculations accurate      │
+└────────────────────────────────────────┘
+```
 
-- [ ] Add Contacts, Debts, DebtHistory sheets to `/init` command
+### Phase 5: Debt Management Keyboards
+**Deliverable**: Complete personal debt tracking with specialized keyboards
+
+**Keyboard Focus**: Debt and contact management keyboards
+```
+🎯 TARGET KEYBOARDS:
+├── 🤝 Lend Money Keyboard (Contact, Amount, Purpose)
+├── 🙏 Borrow Money Keyboard (Contact, Amount, Terms)
+├── 💳 Debt Payment Keyboard (Debt Selection, Payment Amount)
+├── 👤 Contact Management Keyboard (Add/Edit Contacts)
+└── 📊 Debt Overview Keyboard (Summary, Quick Actions)
+```
+
+**Implementation Tasks**:
+- [ ] Add Contacts, Debts, DebtHistory sheets to `/init`
 - [ ] Create debt-related TypeScript types (debt.types.ts)
-- [ ] Implement debt transaction types (lend, borrow, debt_payment, debt_received)
-- [ ] Create debt management commands:
-  - [ ] `/lend` - Record money lent to someone
-  - [ ] `/borrow` - Record money borrowed from someone
-  - [ ] `/pay` - Record debt payments (giving or receiving)
-  - [ ] `/debts` - Show debt overview and balances
-  - [ ] `/contacts` - Manage lending contacts
-- [ ] Update AI chains to detect debt language patterns
-- [ ] Create debt-manager.ts and contact-manager.ts
-- [ ] Add debt management keyboards and flows
-- [ ] Implement automatic debt balance updates
-- [ ] Add payment history tracking
-- [ ] Test: Lend money → record payments → track balances → debt overview
-- [ ] **Working Version**: Complete personal finance app with debt tracking
+- [ ] Implement debt transaction keyboards
+- [ ] Create contact management system
+- [ ] Add debt tracking and balance updates
+- [ ] Implement payment history tracking
+- [ ] Create debt overview and summary keyboards
+- [ ] Add debt-specific AI detection patterns
 
-### Phase 6: Polish & Advanced Features (Production Ready)
-**Deliverable**: Production-ready bot with advanced features
+**Test Checklist**:
+```
+✅ Manual Test Checklist - Phase 5
+┌────────────────────────────────────────┐
+│ Test 1: Debt Transaction Keyboards     │
+├────────────────────────────────────────┤
+│ □ Lend keyboard shows contact selection│
+│ □ Borrow keyboard has terms fields    │
+│ □ Debt payment shows active debts     │
+│ □ Contact creation works inline       │
+│ □ Purpose/description fields work     │
+│                                        │
+│ Test 2: Contact Management             │
+├────────────────────────────────────────┤
+│ □ /contacts command lists all contacts│
+│ □ Add new contact flow works          │
+│ □ Edit contact information works      │
+│ □ Contact search and selection works  │
+│ □ Duplicate contact detection works   │
+│                                        │
+│ Test 3: Debt Tracking Logic           │
+├────────────────────────────────────────┤
+│ □ Debt balances calculate correctly   │
+│ □ Payment updates balance correctly   │
+│ □ Payment history records properly    │
+│ □ Debt status updates (ACTIVE/PAID)   │
+│ □ /debts overview shows correct totals│
+│                                        │
+│ Test 4: AI Debt Detection             │
+├────────────────────────────────────────┤
+│ □ "Lent $50 to John" → Creates debt   │
+│ □ "John paid me back $25" → Updates   │
+│ □ "Borrowed $100 from Mom" → Records  │
+│ □ AI suggests correct transaction type│
+└────────────────────────────────────────┘
+```
 
-- [ ] Add Dashboard sheet with summary formulas (including debt summaries)
+### Phase 6: Advanced Keyboards & Polish
+**Deliverable**: Production-ready bot with advanced keyboard features
+
+**Keyboard Focus**: Advanced features and polish
+```
+🎯 TARGET KEYBOARDS:
+├── 📊 Dashboard Keyboard (Summary, Reports, Quick Stats)
+├── 🔍 Search & Filter Keyboard (Advanced transaction search)
+├── ⚙️ Settings Keyboard (Preferences, Configuration)
+├── 📤 Export Keyboard (Data export options)
+└── 🔔 Notification Keyboard (Reminders, Alerts)
+```
+
+**Implementation Tasks**:
+- [ ] Add Dashboard sheet with summary formulas
+- [ ] Create advanced keyboard interactions
 - [ ] Implement yearly sheet auto-creation
-- [ ] Add photo caption processing enhancement
-- [ ] Implement confidence scoring
-- [ ] Add error handling and retry logic
-- [ ] Create comprehensive documentation
-- [ ] Remove all Notion dependencies
-- [ ] Add debt payment reminders (optional)
-- [ ] Implement interest calculations for debts
-- [ ] **Working Version**: Production-ready personal finance bot with debt management
+- [ ] Add confidence scoring and smart suggestions
+- [ ] Create export and backup functionality
+- [ ] Add debt payment reminders
+- [ ] Implement comprehensive error handling
+- [ ] Add keyboard navigation improvements
+
+**Test Checklist**:
+```
+✅ Manual Test Checklist - Phase 6
+┌────────────────────────────────────────┐
+│ Test 1: Dashboard & Analytics          │
+├────────────────────────────────────────┤
+│ □ Dashboard shows spending summaries   │
+│ □ Debt overview displays correctly     │
+│ □ Monthly/yearly breakdowns work       │
+│ □ Category analysis functions          │
+│ □ Export features work correctly       │
+│                                        │
+│ Test 2: Advanced Features              │
+├────────────────────────────────────────┤
+│ □ Search functionality works           │
+│ □ Filter options function correctly    │
+│ □ Settings keyboard allows changes     │
+│ □ Yearly sheet auto-creation works     │
+│ □ Confidence scoring displays          │
+│                                        │
+│ Test 3: Production Readiness           │
+├────────────────────────────────────────┤
+│ □ Error handling graceful             │
+│ □ Performance acceptable under load    │
+│ □ Data validation prevents corruption  │
+│ □ Backup/restore functionality works   │
+│ □ User experience smooth and intuitive │
+│                                        │
+│ Test 4: Complete User Flows           │
+├────────────────────────────────────────┤
+│ □ End-to-end expense flow works        │
+│ □ End-to-end debt management works     │
+│ □ End-to-end transfer flow works       │
+│ □ Multi-user scenarios function        │
+│ □ All keyboard flows intuitive         │
+└────────────────────────────────────────┘
+```
+
+## Phase Testing Protocol
+
+**After Each Phase**:
+1. **Complete Manual Testing**: Use provided checklist
+2. **User Feedback**: Report issues, suggestions, UX improvements
+3. **AI Agent Review**: Address feedback and fix issues before next phase
+4. **Keyboard Flow Validation**: Ensure all keyboards work as designed
+5. **Data Integrity Check**: Verify Google Sheets data accuracy
 
 ## Technical Implementation Notes
 
