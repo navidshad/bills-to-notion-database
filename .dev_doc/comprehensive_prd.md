@@ -46,7 +46,7 @@ Create a smart, conversational personal finance assistant that:
 **Bills_{YEAR} Columns:**
 ```typescript
 interface BillRecord {
-  id: number;                    // Sequential numeric ID starting from 100
+  id: number;                    // Unix timestamp ID in seconds (e.g., 1704988800)
   bill_id?: number;              // Reference to TempBill if originated there
   date: string;                  // ISO date
   title: string;                 // Description
@@ -66,6 +66,7 @@ interface BillRecord {
   debt_type?: "LENT" | "BORROWED"; // Type of debt relationship
   tags?: string;                 // Comma-separated tags
   notes?: string;                // Additional notes
+  original_message_id?: number;  // Telegram message ID for edit updates
   created_at: string;            // Creation timestamp
   updated_at: string;            // Last update timestamp
 }
@@ -122,12 +123,14 @@ interface DebtPayment {
 **TempBills Sheet Columns:**
 ```typescript
 interface TempBill {
-  bill_id: number;               // Sequential numeric ID starting from 100 (primary key)
+  bill_id: number;               // Unix timestamp ID in seconds (primary key, matches BillRecord.id)
   user_id: string;               // Telegram user ID
   transaction_data: string;      // JSON string of BillRecord data
   guide_message_ids: string;     // JSON array of guide message IDs for cleanup [123, 124, 125]
   user_input_message_id?: number; // User's input message ID for cleanup
   original_message_id: number;   // The main transaction message to preserve
+  is_edit_mode: boolean;         // NEW: true if editing existing bill from yearly sheet
+  original_bill_year?: number;   // NEW: year of original bill for edit replacement
   created_at: string;            // Creation timestamp
   updated_at: string;            // Last update timestamp
 }
@@ -450,7 +453,7 @@ Bot: Transaction #100: $150.75 Food expense      ← Clean final result
 #### 3.3 Enhanced Data Extraction
 ```typescript
 interface EnhancedBillSchema {
-  id: number;                      // Sequential numeric ID starting from 100
+  id: number;                      // Unix timestamp ID in seconds (e.g., 1704988800)
   bill_id: number;                 // Session management ID (matches TempBills)
   title: string;
   amount: number;
@@ -477,6 +480,7 @@ interface EnhancedBillSchema {
   confidence_score: number;
   description: string;
   original_text?: string;
+  original_message_id?: number;    // NEW: Telegram message ID for updates
 }
 ```
 
@@ -1007,18 +1011,16 @@ function handlePlaceholderButton(callback_data: string): string {
 - 💰 **Income Transactions** - Full keyboard, source account management  
 - 🔄 **Transfer Transactions** - Full keyboard, multi-account transfers
 - 📋 **TempBills System** - Transaction data persistence during editing
-- 🔢 **Numeric ID System** - Sequential transaction IDs starting from 100
+- 🔢 **Sequential ID System** - Transaction IDs starting from 100 (⚠️ TO BE CHANGED to Unix timestamps in Phase 3)
 - 📞 **/pending Command** - List all active temporary bills
 - 🔄 **Data Persistence** - Account/type switching preserves all data
 - 🚫 **Debt Types Disabled** - Properly commented out until Phase 5
 
-**🔧 Recent Fixes Applied:**
-- ✅ **Fixed transaction data loss** when switching accounts (amount preservation)
-- ✅ **Fixed transaction data loss** when switching transaction types (all data preserved)
-- ✅ **Removed confusing debt type buttons** until proper Phase 5 implementation
-- ✅ **Added helpful placeholder messages** for Phase 5 debt features
-- ✅ **Implemented proper TempBills system** for transaction data persistence
-- ✅ **Added /pending command** to list active temporary bills
+**🚀 READY FOR PHASE 3 TRANSITION:**
+- 🔄 **ID System Migration** - Change from sequential (100+) to Unix timestamp in seconds
+- 📊 **Yearly Sheet Storage** - Move from TempBills-only to Bills_YYYY sheets
+- ✏️ **Simplified Edit Flow** - Submitted bills get single "Edit" button
+- 🔄 **Edit-Resubmit Cycle** - Bills_YYYY → TempBills → Bills_YYYY pattern
 
 **Current Transaction Types Available:**
 | Type            | Status        | Features                                    |
@@ -1112,60 +1114,78 @@ function handlePlaceholderButton(callback_data: string): string {
 └────────────────────────────────────────┘
 ```
 
-### Phase 3: Input Collection & Field Edit Keyboards
-**Deliverable**: ID-based input collection with field-specific keyboards
+### Phase 3: Yearly Sheet Transition & Edit System
+**Deliverable**: Unix timestamp ID system, yearly sheet storage, and simplified edit flow
 
-**Keyboard Focus**: Field edit keyboards + input collection system
+**Keyboard Focus**: Simplified edit keyboards for submitted transactions
 ```
 🎯 TARGET KEYBOARDS:
-├── 📂 Category Selection Keyboard
-├── 💳 Account Selection Keyboard  
-├── 🏷️ Transaction Type Selection Keyboard
-└── 💰 Manual Input Collection (ID-based)
+├── ✏️ Submitted Bill Keyboard (Only "Edit" button + bill info)
+├── 📂 Edit Mode Keyboards (Category, Account, Type selection during edit)
+└── 🔄 Edit Flow Management (Temp → Yearly sheet transitions)
 ```
 
 **Implementation Tasks**:
-- [ ] Add TempBills sheet with numeric ID and guide message tracking
-- [ ] Implement clean numeric ID-based input collection system
-- [ ] Create field-specific edit keyboards with numeric ID support
-- [ ] Add "Copy ID" buttons to primary keyboards showing numeric IDs
-- [ ] Implement message parsing for numeric ID input collection (`/^(\d{3,})\s+(.+)$/`)
-- [ ] Add automatic message cleanup functionality (guide messages + user input)
-- [ ] Create "/pending" command showing clean numeric ID list
-- [ ] Implement ID manager for sequential numeric ID generation (starting from 100)
+- [x] ~~TempBills system~~ (✅ COMPLETED in Phase 2)
+- [x] ~~Field edit keyboards~~ (✅ COMPLETED in Phase 2)  
+- [x] ~~Manual input collection~~ (✅ COMPLETED in Phase 2)
+- [ ] **NEW**: Replace sequential IDs (100, 101...) with Unix timestamp IDs in seconds
+- [ ] **NEW**: Move submitted transactions from TempBills to Bills_YYYY sheets
+- [ ] **NEW**: Create simplified "Edit" keyboard for submitted transactions
+- [ ] **NEW**: Implement edit-resubmit flow (Yearly → Temp → Yearly with replacement)
+- [ ] **NEW**: Update message tracking system for edit flows
+- [ ] **NEW**: Ensure single bill version in chat history after edits
+
+**Core Changes from Phase 2**:
+1. **ID System**: Unix timestamp in seconds instead of sequential numbers (100+ → 1704988800+)
+2. **Storage Flow**: TempBills → Bills_YYYY (instead of staying in TempBills)
+3. **Edit Flow**: Bills_YYYY → TempBills → Bills_YYYY (with replacement)
+4. **Keyboard Simplification**: Submitted bills show only "Edit" button
 
 **Test Checklist**:
 ```
 ✅ Manual Test Checklist - Phase 3
 ┌────────────────────────────────────────┐
-│ Test 1: Clean Input Collection System  │
+│ Test 1: Unix Timestamp ID System       │
 ├────────────────────────────────────────┤
-│ □ Click "Edit Amount" → Button dims    │
-│ □ Bot sends input prompt with #100     │
-│ □ "Copy ID" button works correctly     │
-│ □ Send "100 150.75" → Amount updates   │
-│ □ Original keyboard refreshes          │
-│ □ All guide messages automatically deleted│
-│ □ User input message automatically deleted│
-│ □ Chat history shows only final result │
+│ □ New bills get Unix timestamp IDs     │
+│ □ IDs are unique (1704988800000+)      │
+│ □ ID validation works correctly        │
+│ □ Copy ID shows timestamp ID           │
+│ □ Message parsing works with long IDs  │
 │                                        │
-│ Test 2: Field Edit Keyboards           │
+│ Test 2: Yearly Sheet Storage           │
 ├────────────────────────────────────────┤
-│ □ Category selection shows all options │
-│ □ Account selection shows all options  │
-│ □ Transaction type selection works     │
-│ □ "New Category" creates new entry     │
-│ □ "Back" button returns to main        │
+│ □ Submit moves bill from Temp to Bills_YYYY│
+│ □ Bill appears in correct yearly sheet │
+│ □ TempBills record gets cleaned up     │
+│ □ Message updates to "Edit" only format│
+│ □ All bill data preserved correctly    │
 │                                        │
-│ Test 3: Clean Session Management       │
+│ Test 3: Edit Flow (Yearly → Temp → Yearly)│
 ├────────────────────────────────────────┤
-│ □ Multiple users can edit simultaneously│
-│ □ TempBills stores pending transactions│
-│ □ "/pending" shows clean numeric ID list│
-│ □ Submit moves from TempBills to Bills │
-│ □ Cancel removes from TempBills        │
-│ □ Numeric IDs sequential (100, 101...)  │
-│ □ Chat history remains clean throughout│
+│ □ Click "Edit" on submitted bill works │
+│ □ Bill moves from yearly to temp sheet │
+│ □ Original edit keyboards appear       │
+│ □ All edits work (amount, category, etc)│
+│ □ Re-submit replaces original in yearly│
+│ □ Message returns to simple "Edit" format│
+│                                        │
+│ Test 4: Message Tracking & Cleanup     │
+├────────────────────────────────────────┤
+│ □ Edit flow tracks all guide messages  │
+│ □ Submit cleans up all temp messages   │
+│ □ Only one bill version in chat history│
+│ □ Edit → Cancel restores original bill │
+│ □ Concurrent edits handled gracefully  │
+│                                        │
+│ Test 5: Backward Compatibility         │
+├────────────────────────────────────────┤
+│ □ Existing Phase 2 features still work │
+│ □ /pending command works with new IDs  │
+│ □ Edit keyboards unchanged from Phase 2│
+│ □ All transaction types still supported│
+│ □ Category/Account selection unchanged  │
 └────────────────────────────────────────┘
 ```
 
@@ -1441,111 +1461,48 @@ function registerCallbackHandler(bot: any) {
 - 🔄 **Transfer** - Full functionality with multi-account support
 - 🚧 **Debt Types** - Commented out until Phase 5 (Lend, Borrow, Debt Payment, Debt Received)
 
-### Clean Transaction Commands Flow
+### Phase 3 Summary - Key Changes
+
+### 🔄 ID System Migration
+- **Before**: Sequential IDs starting from 100 (100, 101, 102...)
+- **After**: Unix timestamp IDs in seconds (1704988800, 1704988801...)
+- **Benefits**: Shorter IDs (10 digits), truly unique, sortable by creation time, no ID conflicts
+
+### 📊 Storage Pattern Change
+- **Before**: All transactions stay in TempBills until submitted
+- **After**: Submit moves transactions from TempBills → Bills_YYYY sheets
+- **Benefits**: Proper data organization, yearly sheet separation
+
+### ✏️ Simplified Edit Experience
+- **Before**: Submitted bills disappear from chat
+- **After**: Submitted bills show single "Edit" button for future changes
+- **Benefits**: Always visible transaction history, easy editing access
+
+### 🔄 Edit Flow Pattern
 ```
-User: /add
-Bot: 📸 Send me a photo of your receipt or describe your expense
-
-User: [Sends receipt photo]
-Bot: 💰 Amount: $25.50
-     📅 Date: Jan 15, 2024
-     📂 Category: Food
-     💳 Account: Main Card
-     
-     ---
-     MENU: 💸 Expense Transaction #100 👇
-     [Clean keyboard with action buttons only]
-
-User: /add Spent $15 on coffee
-Bot: 💰 Amount: $15.00
-     📅 Date: Jan 15, 2024
-     📂 Category: Food
-     💳 Account: Main Card
-     
-     ---
-     MENU: 💸 Expense Transaction #101 👇
-
-User: [Clicks "💰 Edit Amount" on transaction #100]
-Bot: 💰 Send the new amount for transaction #100    ← AUTO-DELETED
-     Format: 100 [amount]                          ← AUTO-DELETED
-
-User: 100 150.75                                   ← AUTO-DELETED
-Bot: 💰 Amount: $150.75                           ← Updated message
-     📅 Date: Jan 15, 2024
-     📂 Category: Food
-     💳 Account: Main Card
-     
-     ---
-     MENU: 💸 Expense Transaction #100 👇
-     [Clean keyboard - all guide messages gone]
-
-Final Chat History:
-User: [Photo of receipt]
-Bot: 💰 Amount: $150.75                           ← Clean result only
-     📅 Date: Jan 15, 2024
-     📂 Category: Food
-     💳 Account: Main Card
-     
-     ---
-     MENU: 💸 Expense Transaction #100 👇
-     [Action buttons keyboard]
+NEW FLOW: Bills_YYYY → TempBills → Bills_YYYY
+1. User clicks "Edit" on submitted bill
+2. Bill data copied to TempBills with same ID
+3. Full edit keyboards appear (reuse Phase 2 keyboards)
+4. User makes changes and submits
+5. Updated bill replaces original in Bills_YYYY
+6. Message returns to simple "Edit" format
+7. All temporary messages cleaned up
 ```
 
-### Debt Commands Flow (NEW)
-```
-User: /lend
-Bot: 💰 Who did you lend money to?
+### 🧹 Message Management
+- **Enhanced Cleanup**: Edit flows track all guide messages for removal
+- **Single Version**: Only one bill version visible in chat history after submit
+- **Update Pattern**: Original Telegram message gets updated, not replaced
+- **Clean History**: Professional chat appearance with minimal clutter
 
-User: John
-Bot: 💵 How much did you lend to John?
+### 📋 Command Changes
+- **IDs**: All references to "100" become Unix timestamps
+- **Copy ID**: Shows timestamp IDs instead of sequential numbers
+- **Message Parsing**: Updated regex to handle longer timestamp IDs
+- **Backward Compatibility**: /pending command adapted for new ID format
 
-User: $200
-Bot: 📅 When was this loan made? (or just send "today")
-
-User: today  
-Bot: 📝 What was this loan for? (optional)
-
-User: Emergency car repair
-Bot: 📋 Loan Summary:
-     👤 Contact: John
-     💵 Amount: $200.00 USD
-     📅 Date: 2024-01-15
-     📝 Purpose: Emergency car repair
-     
-     [✅ Save Loan] [✏️ Edit] [❌ Cancel]
-
-User: /debts
-Bot: 📊 Your Active Debts & Credits:
-
-     💰 MONEY LENT (Credits):
-     • John: $100 remaining (originally $200)
-     • Sarah: $50 remaining 
-     Total owed to you: $150
-     
-     💸 MONEY BORROWED (Debts):
-     • Mom: $300 remaining (originally $500)
-     • Credit Union: $1,200 remaining
-     Total you owe: $1,500
-     
-     [💰 Record Payment] [📋 Full History] [➕ New Debt/Credit]
-```
-
-### `/init` Command Flow
-```
-User: /init
-Bot: 🔧 Setting up your personal finance tracker...
-     ✅ Created Google Sheets workbook
-     ✅ Set up Config, Categories, Accounts, Bills_2024, Dashboard, TempBills sheets
-     ✅ Set up Contacts, Debts, DebtHistory sheets (NEW)
-     ✅ Added default categories and accounts
-     
-     📋 Your Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
-     
-     Please:
-     1. Save this ID in your .env file as GOOGLE_SPREADSHEET_ID
-     2. Share the sheet with your bot's service account
-     3. Start sending bills and tracking debts! 📸💰
-```
+---
 
 ## Future Considerations
 
