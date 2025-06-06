@@ -464,6 +464,34 @@ function registerCallbackHandler(bot: any) {
 
       const selectedType = typeMap[action as keyof typeof typeMap] || "expense";
 
+      // Retrieve existing transaction data from TempBills to preserve all fields
+      let transactionData = {};
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill && tempBill.transactionData) {
+          // Preserve all existing data and only update transaction type
+          transactionData = {
+            ...tempBill.transactionData,
+            transaction_type: selectedType,
+          };
+
+          // Update TempBills with the new transaction type
+          await googleSheetsAdapter.updateTempBill(transactionId, {
+            transactionData: transactionData,
+          });
+        } else {
+          // Fallback if TempBill not found (shouldn't happen)
+          console.warn(
+            `TempBill not found for transaction ${transactionId}, using minimal data`
+          );
+          transactionData = { transaction_type: selectedType };
+        }
+      } catch (error) {
+        console.error("Error retrieving transaction data:", error);
+        // Fallback to minimal data
+        transactionData = { transaction_type: selectedType };
+      }
+
       // Get the appropriate keyboard and message for the selected type
       let keyboard;
       let typeEmoji;
@@ -471,47 +499,46 @@ function registerCallbackHandler(bot: any) {
 
       switch (selectedType) {
         case "income":
-          keyboard = createIncomeKeyboard(transactionId, {});
+          keyboard = createIncomeKeyboard(transactionId, transactionData);
           typeEmoji = "💰";
           typeName = "Income";
           break;
         case "transfer":
-          keyboard = createTransferKeyboard(transactionId, {});
+          keyboard = createTransferKeyboard(transactionId, transactionData);
           typeEmoji = "🔄";
           typeName = "Transfer";
           break;
         case "lend":
           // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, {});
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
           typeEmoji = "🤝";
           typeName = "Lend Money";
           break;
         case "borrow":
           // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, {});
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
           typeEmoji = "🙏";
           typeName = "Borrow Money";
           break;
         case "debt_payment":
           // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, {});
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
           typeEmoji = "💳";
           typeName = "Debt Payment";
           break;
         case "debt_received":
           // For now, use expense keyboard (will be enhanced in Phase 5)
-          keyboard = createExpenseKeyboard(transactionId, {});
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
           typeEmoji = "💵";
           typeName = "Debt Received";
           break;
         default: // expense
-          keyboard = createExpenseKeyboard(transactionId, {});
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
           typeEmoji = "💸";
           typeName = "Expense";
       }
 
       // Update the message with the new transaction type
-      const transactionData = {};
       const messageText = formatTransactionMessage(
         selectedType,
         transactionId,
@@ -599,10 +626,13 @@ MENU: Cancellation Confirmation 👇`;
     ) {
       // Retrieve existing transaction data from TempBills
       let transactionData = {};
+      let transactionType = "expense"; // default
       try {
         const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
         if (tempBill && tempBill.transactionData) {
           transactionData = tempBill.transactionData;
+          transactionType =
+            (transactionData as any).transaction_type || "expense";
         } else {
           console.warn(`TempBill not found for transaction ${transactionId}`);
         }
@@ -610,9 +640,21 @@ MENU: Cancellation Confirmation 👇`;
         console.error("Error retrieving transaction data:", error);
       }
 
-      const keyboard = createExpenseKeyboard(transactionId, transactionData);
+      // Create the appropriate keyboard based on transaction type
+      let keyboard;
+      switch (transactionType) {
+        case "income":
+          keyboard = createIncomeKeyboard(transactionId, transactionData);
+          break;
+        case "transfer":
+          keyboard = createTransferKeyboard(transactionId, transactionData);
+          break;
+        default: // expense and other types
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
+      }
+
       const messageText = formatTransactionMessage(
-        "expense",
+        transactionType,
         transactionId,
         transactionData
       );
