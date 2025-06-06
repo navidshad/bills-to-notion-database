@@ -46,7 +46,8 @@ Create a smart, conversational personal finance assistant that:
 **Bills_{YEAR} Columns:**
 ```typescript
 interface BillRecord {
-  id: string;                    // Auto-generated
+  id: number;                    // Sequential numeric ID starting from 100
+  bill_id?: number;              // Reference to TempBill if originated there
   date: string;                  // ISO date
   title: string;                 // Description
   amount: number;                // Transaction amount
@@ -73,7 +74,7 @@ interface BillRecord {
 **Contacts Sheet Columns:**
 ```typescript
 interface Contact {
-  contact_id: string;            // Auto-generated
+  contact_id: number;            // Sequential numeric ID starting from 100
   name: string;                  // Person's name
   phone?: string;                // Optional phone number
   relationship?: string;         // Friend, Family, Colleague, etc.
@@ -86,8 +87,8 @@ interface Contact {
 **Debts Sheet Columns:**
 ```typescript
 interface Debt {
-  debt_id: string;               // Auto-generated
-  contact_id: string;            // References Contacts sheet
+  debt_id: number;               // Sequential numeric ID starting from 100
+  contact_id: number;            // References Contacts sheet
   contact_name: string;          // For easy reading
   type: "LENT" | "BORROWED";     // Money lent or borrowed
   original_amount: number;       // Original debt amount
@@ -106,8 +107,8 @@ interface Debt {
 **DebtHistory Sheet Columns:**
 ```typescript
 interface DebtPayment {
-  payment_id: string;            // Auto-generated
-  debt_id: string;               // References Debts sheet
+  payment_id: number;            // Sequential numeric ID starting from 100
+  debt_id: number;               // References Debts sheet
   contact_name: string;          // Person's name
   payment_amount: number;        // Amount paid
   payment_date: string;          // When payment was made
@@ -121,16 +122,18 @@ interface DebtPayment {
 **TempBills Sheet Columns:**
 ```typescript
 interface TempBill {
-  message_id: string;            // Telegram message ID (primary key)
+  bill_id: number;               // Sequential numeric ID starting from 100 (primary key)
   user_id: string;               // Telegram user ID
   transaction_data: string;      // JSON string of BillRecord data
-  input_message_ids: string;     // JSON array of message IDs for cleanup ["msg_1", "msg_2"]
+  guide_message_ids: string;     // JSON array of guide message IDs for cleanup [123, 124, 125]
+  user_input_message_id?: number; // User's input message ID for cleanup
+  original_message_id: number;   // The main transaction message to preserve
   created_at: string;            // Creation timestamp
   updated_at: string;            // Last update timestamp
 }
 ```
 
-**Input Message Tracking**: The `input_message_ids` field stores a JSON array of all temporary messages sent during input collection (prompt messages, error messages, etc.) that need to be cleaned up when the transaction is submitted or cancelled.
+**Clean Message Management**: The system tracks all temporary guide messages and user input messages for automatic cleanup, ensuring chat history remains clean with only final transaction results visible.
 
 #### 1.3 Configuration Management
 - **Authentication**: Service Account with Google Sheets API
@@ -182,56 +185,66 @@ The bot uses a dynamic inline keyboard system that adapts based on transaction t
 
 **Expense Transaction Keyboard:**
 ```
+Message Text: 
+💸 Expense Transaction #100
+💰 Amount: $25.50 | 📅 Date: Jan 15, 2024
+📂 Category: Food | 💳 Account: Main Card
+
+Keyboard:
 ┌─────────────────────────────────────────┐
-│ 🏷️ Type: Expense                [Edit] │
+│ 💰 Edit Amount   📅 Edit Date           │
 ├─────────────────────────────────────────┤
-│ 💰 $25.50 [Edit]    📅 Jan 15 [Edit]   │
+│ 📂 Change Category                      │
 ├─────────────────────────────────────────┤
-│ 📂 Category: Food             [Change]  │
+│ 💳 Change Account                       │
 ├─────────────────────────────────────────┤
-│ 💳 Account: Main Card        [Change]   │
+│ 🏷️ Change Type   🔄 Re-Calculate       │
 ├─────────────────────────────────────────┤
-│ ✏️ Edit Details    🔄 Re-Calculate      │
-├─────────────────────────────────────────┤
-│              ✅ Submit                  │
+│ 📋 Copy ID: #100   ✅ Submit            │
 └─────────────────────────────────────────┘
 ```
 
 **Transfer Transaction Keyboard:**
 ```
+Message Text:
+🔄 Transfer Transaction #101  
+💰 Amount: $100.00 | 📅 Date: Jan 15, 2024
+📤 From: Main Card → 📥 To: Cash Account
+💱 Exchange Rate: 1.0 USD → USD
+
+Keyboard:
 ┌─────────────────────────────────────────┐
-│ 🏷️ Type: Transfer               [Edit] │
+│ 💰 Edit Amount   📅 Edit Date           │
 ├─────────────────────────────────────────┤
-│ 💰 $100.00 [Edit]   📅 Jan 15 [Edit]   │
+│ 📤 Change From   📥 Change To           │
 ├─────────────────────────────────────────┤
-│ 📤 From: Main Card           [Change]   │
+│ 💱 Edit Exchange Rate                   │
 ├─────────────────────────────────────────┤
-│ 📥 To: Cash Account          [Change]   │
+│ 🏷️ Change Type   🔄 Re-Calculate       │
 ├─────────────────────────────────────────┤
-│ 💱 Exchange Rate: 1.0        [Change]   │
-├─────────────────────────────────────────┤
-│ ✏️ Edit Details    🔄 Re-Calculate      │
-├─────────────────────────────────────────┤
-│              ✅ Submit                  │
+│ 📋 Copy ID: #101   ✅ Submit            │
 └─────────────────────────────────────────┘
 ```
 
 **Debt Management Keyboards:**
 ```
+Message Text:
+🤝 Lend Money Transaction #102
+💰 Amount: $200.00 | 📅 Date: Jan 15, 2024  
+👤 Contact: John Smith | 💳 From: Main Card
+📝 Purpose: Car Repair
+
+Keyboard:
 ┌─────────────────────────────────────────┐
-│ 🏷️ Type: Lend Money            [Edit] │
+│ 💰 Edit Amount   📅 Edit Date           │
 ├─────────────────────────────────────────┤
-│ 💰 $200.00 [Edit]   📅 Jan 15 [Edit]   │
+│ 👤 Change Contact                       │
 ├─────────────────────────────────────────┤
-│ 👤 Contact: John Smith       [Change]   │
+│ 💳 Change Account                       │
 ├─────────────────────────────────────────┤
-│ 💳 From Account: Main Card   [Change]   │
+│ 📝 Edit Purpose   🔄 Re-Calculate       │
 ├─────────────────────────────────────────┤
-│ 📝 Purpose: Car Repair       [Change]   │
-├─────────────────────────────────────────┤
-│ ✏️ Edit Details    🔄 Re-Calculate      │
-├─────────────────────────────────────────┤
-│              ✅ Submit                  │
+│ 📋 Copy ID: #102   ✅ Submit            │
 └─────────────────────────────────────────┘
 ```
 
@@ -239,9 +252,12 @@ The bot uses a dynamic inline keyboard system that adapts based on transaction t
 
 **Transaction Type Selection:**
 ```
+Message Text:
+🔄 Change Transaction Type for #100
+Current: Expense → Select new type:
+
+Keyboard:
 ┌─────────────────────────────────────────┐
-│         🔄 Change Transaction Type       │
-├─────────────────────────────────────────┤
 │ 💸 Expense      💰 Income               │
 ├─────────────────────────────────────────┤
 │ 🔄 Transfer     🤝 Lend Money           │
@@ -250,15 +266,18 @@ The bot uses a dynamic inline keyboard system that adapts based on transaction t
 ├─────────────────────────────────────────┤
 │ 💵 Debt Received                        │
 ├─────────────────────────────────────────┤
-│ ← Back                                  │
+│ ← Back to Transaction                   │
 └─────────────────────────────────────────┘
 ```
 
 **Category Selection:**
 ```
+Message Text:
+📂 Select Category for Transaction #100
+Current: Food → Choose new category:
+
+Keyboard:
 ┌─────────────────────────────────────────┐
-│          📂 Select Category             │
-├─────────────────────────────────────────┤
 │ 🍕 Food         🚗 Transport            │
 ├─────────────────────────────────────────┤
 │ 🏠 Housing      💡 Utilities            │
@@ -267,90 +286,121 @@ The bot uses a dynamic inline keyboard system that adapts based on transaction t
 ├─────────────────────────────────────────┤
 │ 🏥 Healthcare   📚 Education            │
 ├─────────────────────────────────────────┤
-│ ➕ New Category                         │
+│ ➕ Create New Category                  │
 ├─────────────────────────────────────────┤
-│ ← Back                                  │
+│ ← Back to Transaction                   │
 └─────────────────────────────────────────┘
 ```
 
 **Contact Selection:**
 ```
+Message Text:
+👤 Select Contact for Transaction #102
+Current: John Smith → Choose contact:
+
+Keyboard:
 ┌─────────────────────────────────────────┐
-│            👤 Select Contact            │
-├─────────────────────────────────────────┤
 │ 👤 John Smith         👤 Sarah J.       │
 ├─────────────────────────────────────────┤
 │ 👤 Mom                👤 Dad            │
 ├─────────────────────────────────────────┤
 │ 👤 Mike Wilson        👤 Lisa Chen      │
 ├─────────────────────────────────────────┤
-│ ➕ New Contact                          │
+│ ➕ Add New Contact                      │
 ├─────────────────────────────────────────┤
-│ ← Back                                  │
+│ ← Back to Transaction                   │
 └─────────────────────────────────────────┘
 ```
 
-#### 2.4 Keyboard Design Principles
+#### 2.4 Enhanced Keyboard Design Principles
 
-- **First Row**: Always shows transaction type with edit option
-- **Second Row**: Amount and date with separate edit buttons
-- **Context Rows**: Adapt based on transaction type (category for expenses, contacts for debts, etc.)
-- **Action Row**: Edit details and re-calculate options
-- **Submit Row**: Final confirmation button
-- **Navigation**: Consistent back buttons and clear flow patterns
-- **Quick Actions**: Common shortcuts for frequently used operations
+- **Message-Based Titles**: Menu titles and transaction details are displayed in the message text, not as keyboard buttons
+- **Clean Button Layout**: Keyboard contains only actionable buttons, no title/header buttons
+- **Context-Aware Content**: Message text shows all relevant transaction details with emojis and clear formatting
+- **Functional Buttons Only**: Every button performs an action - no decorative or informational buttons
+- **Placeholder Messages**: Non-implemented buttons show helpful "Coming soon" or "Not implemented yet" messages
+- **Consistent Navigation**: "← Back to Transaction" pattern for all sub-menus
+- **Copy ID Integration**: "📋 Copy ID: #XXX" button included in main transaction keyboards
+- **Logical Grouping**: Related actions grouped together (amount/date, accounts, etc.)
 
-#### 2.5 Input Collection Strategy
+#### 2.5 Placeholder Message System
 
-**Challenge**: Telegram bots are stateless, making text input collection for field editing complex without persistent state management.
+For non-implemented features, the bot responds with helpful placeholder messages:
 
-**Solution**: ID-Based Input Collection - A stateless approach that embeds transaction context directly in user messages.
+```typescript
+// Placeholder message examples
+const PLACEHOLDER_MESSAGES = {
+  edit_details: "✨ Advanced editing features coming soon!\n\nFor now, you can:\n• Edit individual fields using the buttons\n• Use direct input: '100 new_value'\n• Re-calculate to refresh data",
+  
+  exchange_rate: "💱 Exchange rate editing not yet implemented\n\nCurrently using 1:1 rate. Advanced currency features coming in next update!",
+  
+  recurring: "🔄 Recurring transaction detection coming soon!\n\nFor now, manually add similar transactions.",
+  
+  analytics: "📊 Financial analytics dashboard coming soon!\n\nWill include spending trends, category breakdowns, and insights.",
+  
+  export: "📤 Data export features coming soon!\n\nWill support CSV, PDF, and Excel formats."
+};
+```
+
+#### 2.6 Clean Input Collection Strategy
+
+**Challenge**: Telegram bots are stateless, and guide messages create chat clutter that reduces user experience quality.
+
+**Solution**: Clean Numeric ID-Based Input Collection - A stateless approach with automatic message cleanup for professional chat history.
 
 **Implementation Flow:**
 1. **User Interaction**: User clicks an edit button (e.g., "Edit Amount") on transaction keyboard
-2. **Button State Update**: Bot removes/dims the pressed button and updates keyboard to show "⏳ Amount being edited..."
-3. **Input Request**: Bot sends new message requesting input with transaction ID:
+2. **Button State Update**: Bot updates keyboard to show "⏳ Amount being edited..."
+3. **Input Request**: Bot sends guide message requesting input with numeric transaction ID:
    ```
-   💰 Send me the new amount with this ID: msg_123
+   💰 Send the new amount for transaction #100
    
-   Format: msg_123 [new amount]
-   Example: msg_123 150.75
-   
-   [📋 Copy ID: msg_123]
+   Format: 100 [amount]
+   Example: 100 150.75
    ```
-4. **User Response**: User sends message containing both transaction ID and new value: `msg_123 150.75`
+4. **User Response**: User sends message containing transaction ID and new value: `100 150.75`
 5. **Processing**: Bot parses message, extracts transaction ID, validates new value, updates transaction
-6. **Refresh**: Bot updates original transaction keyboard with new data and restores full functionality
+6. **Cleanup**: Bot automatically deletes all guide messages and user's input message
+7. **Refresh**: Bot updates original transaction keyboard with new data and restores full functionality
+
+**Clean Message Management:**
+- **Guide Message Tracking**: All instructional messages are tracked for deletion
+- **User Input Cleanup**: User's input messages are automatically removed after processing
+- **Preserved History**: Only final transaction results remain in chat history
+- **Error Recovery**: Failed cleanup attempts are logged but don't block functionality
 
 **Message Parsing Patterns:**
-- Flexible format support: `msg_123 150.75` or `150.75 msg_123`
-- Regex extraction of transaction IDs and values
-- Graceful handling of typos and formatting errors
+- Numeric ID format: `100 150.75` or `150.75 100`
+- Regex extraction: `/^(\d{3,})\s+(.+)$/` for reliable ID detection
+- Graceful error handling for invalid formats
 
 **Error Handling:**
-- Invalid transaction ID: "Transaction msg_999 not found. Check your pending transactions with /pending"
-- Missing value: "Please include the new amount after msg_123"
-- Invalid format: "I found ID msg_123 but couldn't understand the amount. Please send: msg_123 25.50"
+- Invalid transaction ID: "Transaction #999 not found. Use /pending to see active transactions"
+- Missing value: "Please include the new amount: 100 25.50"
+- Invalid format: "Format should be: 100 25.50"
 
 **Advantages:**
-- **Truly Stateless**: No persistent state storage required
-- **Self-Contained**: Each input message carries its own context
+- **Clean Chat History**: Only final results visible, professional appearance
+- **Numeric IDs**: Easy to remember and type (#100, #101, #102...)
+- **Stateless Design**: No persistent state storage required
 - **Concurrent Safe**: Multiple users can edit different transactions simultaneously
-- **No Cleanup**: No abandoned input sessions or timeouts to manage
-- **Scalable**: Naturally handles multiple concurrent editing sessions
+- **Auto-Cleanup**: Temporary messages automatically removed
+- **Professional UX**: Clean, uncluttered conversation flow
 
-**User Experience Example:**
+**Clean User Experience Example:**
 ```
-User: [Clicks "Edit Amount" on transaction msg_123]
+User: [Clicks "Edit Amount" on transaction #100]
 Bot: [Updates keyboard to show "⏳ Amount being edited..."]
-     
-     💰 Send me the new amount with this ID: msg_123
-     Format: msg_123 [new amount]
-     [📋 Copy ID: msg_123]
+     💰 Send the new amount for transaction #100  ← DELETED after input
+     Format: 100 [amount]                         ← DELETED after input
 
-User: msg_123 150.75
-Bot: ✅ Updated amount to $150.75
-     [Refreshes original transaction keyboard with updated data]
+User: 100 150.75                                  ← DELETED after processing
+Bot: [Updated transaction keyboard with new amount - guide messages gone]
+
+Final Chat History:
+User: [Photo of receipt]
+Bot: Transaction #100: $150.75 Food expense      ← Clean final result
+     [Updated keyboard with all options]
 ```
 
 ### 3. Enhanced AI Processing
@@ -370,8 +420,8 @@ Bot: ✅ Updated amount to $150.75
 #### 3.3 Enhanced Data Extraction
 ```typescript
 interface EnhancedBillSchema {
-  id: string;
-  message_id: string;              // Telegram message ID for session management
+  id: number;                      // Sequential numeric ID starting from 100
+  bill_id: number;                 // Session management ID (matches TempBills)
   title: string;
   amount: number;
   currency_code: string;
@@ -385,9 +435,9 @@ interface EnhancedBillSchema {
   destination_currency?: string;   // For currency exchanges
   exchange_rate?: number;          // For currency exchanges
   // Debt-related fields (NEW)
-  contact_id?: string;            // Links to Contacts sheet
-  contact_name?: string;          // Person's name for easy reading
-  related_debt_id?: string;       // Links to active debt in Debts sheet
+  contact_id?: number;             // Links to Contacts sheet (numeric)
+  contact_name?: string;           // Person's name for easy reading
+  related_debt_id?: number;        // Links to active debt in Debts sheet (numeric)
   debt_type?: "LENT" | "BORROWED"; // Type of debt relationship
   // General fields
   payment_method?: string;
@@ -555,15 +605,17 @@ interface Config {
 - Provides the user with the Spreadsheet ID to configure
 - Guides user through basic setup process
 
-#### US9: Session Management
-**As a user**, I want to reference and modify specific bills using their message ID, **so that** I can edit transactions later without losing context.
+#### US9: Clean Session Management
+**As a user**, I want to reference and modify specific bills using clean numeric IDs, **so that** I can edit transactions later with a professional, uncluttered chat experience.
 
 **Acceptance Criteria:**
-- Each processed bill shows a unique message ID and "Copy ID" button
-- User can provide bill ID to edit: "Edit bill msg_12345"
-- Unconfirmed bills are stored in TempBills sheet temporarily
+- Each processed bill shows a unique numeric ID (#100, #101, etc.) and "Copy ID" button
+- User can provide bill ID to edit: "Edit bill 100" or "100 new_amount"
+- Unconfirmed bills are stored in TempBills sheet temporarily with numeric IDs
 - Bills are removed from TempBills when submitted or cancelled
-- User can list pending bills: "Show pending bills"
+- All guide messages and user input are automatically cleaned up
+- Chat history shows only final transaction results
+- User can list pending bills: "/pending" shows clean list with numeric IDs
 
 #### US10: Recurring Transaction Detection
 **As a user**, I want the system to detect recurring transactions, **so that** I can automate regular expense logging.
@@ -629,6 +681,186 @@ interface Config {
 - Can view complete lending history with each contact
 - Can add notes about lending relationships
 
+## Technical Implementation Details
+
+### 6.0 Numeric ID System & Message Cleanup
+
+#### 6.0.1 ID Management System
+```typescript
+// src/managers/id-manager.ts
+class IDManager {
+  private static async getNextBillID(): Promise<number> {
+    // Check TempBills and Bills_YYYY sheets for highest existing ID
+    const currentYear = new Date().getFullYear();
+    const billsSheet = `Bills_${currentYear}`;
+    
+    const [tempBillsResponse, billsResponse] = await Promise.all([
+      googleSheets.getRange('TempBills!A:A'),
+      googleSheets.getRange(`${billsSheet}!A:A`)
+    ]);
+    
+    let maxId = 99; // Start from 99 so next ID is 100
+    
+    // Check existing IDs in both sheets
+    [tempBillsResponse, billsResponse].forEach(response => {
+      response.values?.forEach(row => {
+        const id = parseInt(row[0]);
+        if (!isNaN(id) && id > maxId) {
+          maxId = id;
+        }
+      });
+    });
+    
+    return maxId + 1;
+  }
+  
+  static async generateBillID(): Promise<number> {
+    return await this.getNextBillID();
+  }
+}
+```
+
+#### 6.0.2 Message Cleanup System
+```typescript
+// src/utils/message-cleanup.ts
+interface MessageTracker {
+  billId: number;
+  guideMessages: number[];          // All guide message IDs to cleanup
+  userInputMessageId?: number;      // User's input message to cleanup
+  originalTransactionMessageId: number; // The main transaction message to keep
+}
+
+class MessageCleanupManager {
+  private static messageTracker = new Map<number, MessageTracker>();
+  
+  static trackMessages(billId: number, tracker: MessageTracker) {
+    this.messageTracker.set(billId, tracker);
+  }
+  
+  static async cleanupMessages(billId: number, bot: any, chatId: string) {
+    const tracker = this.messageTracker.get(billId);
+    if (!tracker) return;
+    
+    // Delete all guide messages
+    for (const messageId of tracker.guideMessages) {
+      try {
+        await bot.deleteMessage(chatId, messageId);
+      } catch (error) {
+        console.warn(`Could not delete guide message ${messageId}:`, error);
+      }
+    }
+    
+    // Delete user input message if exists
+    if (tracker.userInputMessageId) {
+      try {
+        await bot.deleteMessage(chatId, tracker.userInputMessageId);
+      } catch (error) {
+        console.warn(`Could not delete user input message:`, error);
+      }
+    }
+    
+    // Remove from tracker
+    this.messageTracker.delete(billId);
+  }
+}
+```
+
+#### 6.0.3 Enhanced Message Handler for Numeric Input
+```typescript
+// Updated src/events/message-handler.ts
+async function handleInputMessage(msg: any, bot: any) {
+  const text = msg.text;
+  const chatId = msg.chat.id;
+  
+  // Check if message contains numeric ID format: "100 25.50"
+  const inputMatch = text.match(/^(\d{3,})\s+(.+)$/);
+  
+  if (inputMatch) {
+    const billId = parseInt(inputMatch[1]);
+    const inputValue = inputMatch[2].trim();
+    
+    // Track user's input message for cleanup
+    const tracker = MessageCleanupManager.getTracker(billId);
+    if (tracker) {
+      tracker.userInputMessageId = msg.message_id;
+      MessageCleanupManager.trackMessages(billId, tracker);
+    }
+    
+    // Process the input
+    const success = await processFieldUpdate(billId, inputValue, bot, chatId);
+    
+    if (success) {
+      // Clean up all guide messages and user input
+      await MessageCleanupManager.cleanupMessages(billId, bot, chatId);
+      
+      // Update transaction keyboard with new data
+      await refreshTransactionKeyboard(billId, bot, chatId);
+    }
+    
+    return; // Don't process as regular message
+  }
+  
+  // Handle regular messages (existing logic)
+  // ...
+}
+```
+
+#### 6.0.4 Clean Keyboard Implementation
+```typescript
+// Updated src/keyboards/bill-keyboards.ts
+function createTransactionKeyboard(billId: number, transactionData: any) {
+  return {
+    inline_keyboard: [
+      [
+        { text: "💰 Edit Amount", callback_data: `edit_amount_${billId}` },
+        { text: "📅 Edit Date", callback_data: `edit_date_${billId}` }
+      ],
+      [
+        { text: "📂 Change Category", callback_data: `edit_category_${billId}` }
+      ],
+      [
+        { text: "💳 Change Account", callback_data: `edit_account_${billId}` }
+      ],
+      [
+        { text: "🏷️ Change Type", callback_data: `edit_type_${billId}` },
+        { text: "🔄 Re-Calculate", callback_data: `recalculate_${billId}` }
+      ],
+      [
+        { text: `📋 Copy ID: #${billId}`, callback_data: `copy_id_${billId}` },
+        { text: "✅ Submit", callback_data: `submit_${billId}` }
+      ]
+    ]
+  };
+}
+
+// Message text generation
+function generateTransactionMessage(billId: number, transactionData: any): string {
+  const typeEmoji = getTransactionTypeEmoji(transactionData.type);
+  const typeName = getTransactionTypeName(transactionData.type);
+  
+  return `${typeEmoji} ${typeName} Transaction #${billId}
+💰 Amount: $${transactionData.amount} | 📅 Date: ${transactionData.date}
+📂 Category: ${transactionData.category} | 💳 Account: ${transactionData.account}`;
+}
+
+// Placeholder message handler
+function handlePlaceholderButton(callback_data: string): string {
+  const PLACEHOLDER_MESSAGES = {
+    edit_details: "✨ Advanced editing features coming soon!\n\nFor now, you can:\n• Edit individual fields using the buttons\n• Use direct input: '100 new_value'\n• Re-calculate to refresh data",
+    
+    exchange_rate: "💱 Exchange rate editing not yet implemented\n\nCurrently using 1:1 rate. Advanced currency features coming in next update!",
+    
+    recurring: "🔄 Recurring transaction detection coming soon!\n\nFor now, manually add similar transactions.",
+    
+    analytics: "📊 Financial analytics dashboard coming soon!\n\nWill include spending trends, category breakdowns, and insights.",
+    
+    export: "📤 Data export features coming soon!\n\nWill support CSV, PDF, and Excel formats."
+  };
+  
+  return PLACEHOLDER_MESSAGES[callback_data] || "🚧 This feature is not yet implemented.\n\nStay tuned for updates!";
+}
+```
+
 ## Technical Requirements
 
 ### 6.1 Dependencies
@@ -685,25 +917,28 @@ interface Config {
 │   │   ├── commands/
 │   │   │   ├── init-command.ts      # /init command handler
 │   │   │   ├── help-command.ts      # /help command handler
+│   │   │   ├── pending-command.ts   # /pending command handler (NEW)
 │   │   │   ├── lend-command.ts      # /lend command handler (NEW)
 │   │   │   ├── borrow-command.ts    # /borrow command handler (NEW)
 │   │   │   ├── pay-command.ts       # /pay command handler (NEW)
 │   │   │   ├── debts-command.ts     # /debts command handler (NEW)
 │   │   │   └── contacts-command.ts  # /contacts command handler (NEW)
-│   │   ├── message-handler.ts       # Photo/text message processing
+│   │   ├── message-handler.ts       # Photo/text + numeric ID input processing
 │   │   └── callback-handler.ts      # Inline keyboard interactions
 │   ├── managers/
 │   │   ├── debt-manager.ts          # Debt tracking logic (NEW)
-│   │   └── contact-manager.ts       # Contact management (NEW)
+│   │   ├── contact-manager.ts       # Contact management (NEW)
+│   │   └── id-manager.ts            # Numeric ID generation (NEW)
 │   ├── utils/
 │   │   ├── helpers.ts              # editTextMessage + BILL_REPLY_MARKUP
-│   │   └── receipt-processor.ts    # getReceiptDetail function
+│   │   ├── receipt-processor.ts    # getReceiptDetail function
+│   │   └── message-cleanup.ts      # Auto message cleanup system (NEW)
 │   ├── types/
-│   │   ├── bill.types.ts           # Bill and transaction types
+│   │   ├── bill.types.ts           # Bill and transaction types (updated with numeric IDs)
 │   │   ├── debt.types.ts           # Debt and contact types (NEW)
 │   │   └── config.types.ts         # Configuration types
 │   └── keyboards/
-│       ├── bill-keyboards.ts       # Bill processing keyboards
+│       ├── bill-keyboards.ts       # Bill processing keyboards (with numeric IDs)
 │       └── debt-keyboards.ts       # Debt management keyboards (NEW)
 ├── config/ (planned)
 └── docs/ (planned)
@@ -793,26 +1028,29 @@ interface Config {
 ```
 
 **Implementation Tasks**:
-- [ ] Add TempBills sheet with input_message_ids tracking
-- [ ] Implement ID-based input collection system
-- [ ] Create field-specific edit keyboards
-- [ ] Add "Copy ID" buttons to primary keyboards
-- [ ] Implement message parsing for input collection
-- [ ] Add temporary message cleanup functionality
-- [ ] Create "Show pending bills" command
+- [ ] Add TempBills sheet with numeric ID and guide message tracking
+- [ ] Implement clean numeric ID-based input collection system
+- [ ] Create field-specific edit keyboards with numeric ID support
+- [ ] Add "Copy ID" buttons to primary keyboards showing numeric IDs
+- [ ] Implement message parsing for numeric ID input collection (`/^(\d{3,})\s+(.+)$/`)
+- [ ] Add automatic message cleanup functionality (guide messages + user input)
+- [ ] Create "/pending" command showing clean numeric ID list
+- [ ] Implement ID manager for sequential numeric ID generation (starting from 100)
 
 **Test Checklist**:
 ```
 ✅ Manual Test Checklist - Phase 3
 ┌────────────────────────────────────────┐
-│ Test 1: Input Collection System        │
+│ Test 1: Clean Input Collection System  │
 ├────────────────────────────────────────┤
 │ □ Click "Edit Amount" → Button dims    │
-│ □ Bot sends input prompt with ID       │
+│ □ Bot sends input prompt with #100     │
 │ □ "Copy ID" button works correctly     │
-│ □ Send "msg_123 150.75" → Amount updates│
+│ □ Send "100 150.75" → Amount updates   │
 │ □ Original keyboard refreshes          │
-│ □ Temp messages get cleaned up         │
+│ □ All guide messages automatically deleted│
+│ □ User input message automatically deleted│
+│ □ Chat history shows only final result │
 │                                        │
 │ Test 2: Field Edit Keyboards           │
 ├────────────────────────────────────────┤
@@ -822,13 +1060,15 @@ interface Config {
 │ □ "New Category" creates new entry     │
 │ □ "Back" button returns to main        │
 │                                        │
-│ Test 3: Session Management             │
+│ Test 3: Clean Session Management       │
 ├────────────────────────────────────────┤
 │ □ Multiple users can edit simultaneously│
 │ □ TempBills stores pending transactions│
-│ □ "Show pending bills" lists correctly │
+│ □ "/pending" shows clean numeric ID list│
 │ □ Submit moves from TempBills to Bills │
 │ □ Cancel removes from TempBills        │
+│ □ Numeric IDs sequential (100, 101...)  │
+│ □ Chat history remains clean throughout│
 └────────────────────────────────────────┘
 ```
 
@@ -1025,43 +1265,94 @@ interface Config {
 - `src/text-chain.ts` - Update schema and add debt detection patterns
 - `src/vision-chain.ts` - Enhance with caption processing
 - `src/adapters/google-sheets.ts` - Add debt sheet management
+- `src/events/callback-handler.ts` - Add placeholder message handling for non-implemented buttons
+- `src/keyboards/bill-keyboards.ts` - Update to use message text for titles, clean button layouts
+- `src/utils/message-formatter.ts` - New utility for generating formatted transaction messages
 - `package.json` - Ensure TypeScript dependencies
+
+### Enhanced Callback Handler for Placeholder Messages
+```typescript
+// Updated src/events/callback-handler.ts
+function registerCallbackHandler(bot: any) {
+  bot.on("callback_query", async (query: any) => {
+    const { data: callback_data, message } = query;
+    const chatId = message.chat.id;
+    
+    // Handle placeholder buttons (non-implemented features)
+    const placeholderFeatures = [
+      'edit_details', 'exchange_rate', 'recurring', 
+      'analytics', 'export', 'notifications'
+    ];
+    
+    if (placeholderFeatures.some(feature => callback_data.includes(feature))) {
+      const placeholderMessage = handlePlaceholderButton(callback_data);
+      
+      // Send temporary notification message
+      const notificationMsg = await bot.sendMessage(chatId, placeholderMessage);
+      
+      // Auto-delete notification after 5 seconds
+      setTimeout(() => {
+        bot.deleteMessage(chatId, notificationMsg.message_id).catch(() => {});
+      }, 5000);
+      
+      // Answer callback query to remove loading state
+      bot.answerCallbackQuery(query.id);
+      return;
+    }
+    
+    // Handle implemented features
+    // ... existing callback handling logic
+  });
+}
+```
 
 ### Available Commands
 - `/init` - Set up new Google Sheets workbook
 - `/add` - Add new transaction (followed by photo/text)
 - `/add [description]` - Add transaction with text description
-- `Edit bill [id]` - Edit specific bill by message ID
-- `Show pending bills` - List unconfirmed transactions
+- `/pending` - List unconfirmed transactions with clean numeric IDs
+- `Edit bill [id]` - Edit specific bill by numeric ID (e.g., "Edit bill 100")
+- `[id] [value]` - Direct field editing (e.g., "100 25.50" to update amount)
 - `/lend` - Record money lent to someone (NEW)
 - `/borrow` - Record money borrowed from someone (NEW)
 - `/pay` - Record debt payment (NEW)
 - `/debts` - Show debt overview (NEW)
 - `/contacts` - Manage lending contacts (NEW)
 
-### Transaction Commands Flow
+### Clean Transaction Commands Flow
 ```
 User: /add
 Bot: 📸 Send me a photo of your receipt or describe your expense
 
 User: [Sends receipt photo]
-Bot: [Shows processed JSON with keyboard]
-     ┌─────────────────────────────────────┐
-     │ Bill ID: msg_12345 📋 Copy ID       │
-     │ Amount: $25.50 | Category: Food     │
-     │ ✏️ Edit   📂 Change   ✅ Submit      │
-     └─────────────────────────────────────┘
+Bot: 💸 Expense Transaction #100
+     💰 Amount: $25.50 | 📅 Date: Jan 15, 2024
+     📂 Category: Food | 💳 Account: Main Card
+     
+     [Clean keyboard with action buttons only]
 
 User: /add Spent $15 on coffee
-Bot: [Shows processed data with keyboard]
+Bot: 💸 Expense Transaction #101
+     💰 Amount: $15.00 | 📅 Date: Jan 15, 2024
+     📂 Category: Food | 💳 Account: Main Card
 
-User: Edit bill msg_12345
-Bot: Found bill msg_12345. What would you like to edit?
-     Current: $25.50 Food expense from Card
+User: [Clicks "💰 Edit Amount" on transaction #100]
+Bot: 💰 Send the new amount for transaction #100    ← AUTO-DELETED
+     Format: 100 [amount]                          ← AUTO-DELETED
 
-User: Change category to Transport
-Bot: ✅ Updated bill msg_12345 category to Transport
-     [Shows updated keyboard]
+User: 100 150.75                                   ← AUTO-DELETED
+Bot: 💸 Expense Transaction #100                   ← Updated message
+     💰 Amount: $150.75 | 📅 Date: Jan 15, 2024
+     📂 Category: Food | 💳 Account: Main Card
+     
+     [Clean keyboard - all guide messages gone]
+
+Final Chat History:
+User: [Photo of receipt]
+Bot: 💸 Expense Transaction #100                   ← Clean result only
+     💰 Amount: $150.75 | 📅 Date: Jan 15, 2024
+     📂 Category: Food | 💳 Account: Main Card
+     [Action buttons keyboard]
 ```
 
 ### Debt Commands Flow (NEW)
