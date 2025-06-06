@@ -45,7 +45,11 @@ export const generateBillInfo = async (
       : "";
 
   const chatTemplate = ChatPromptTemplate.fromMessages([
-    ["user", "Bill: {billDetail}"],
+    ["user", "Financial Transaction: {billDetail}"],
+    [
+      "user",
+      "TRANSACTION TYPE DETECTION: Analyze the text to determine transaction type:\n• 'expense' - spending money, purchases, bills\n• 'income' - receiving money, salary, refunds\n• 'transfer' - moving money between accounts (keywords: transfer, move, from X to Y)\n• 'lend' - giving money to someone\n• 'borrow' - taking money from someone\n• 'debt_payment' - paying back debt\n• 'debt_received' - receiving debt payment",
+    ],
     [
       "user",
       "it is really important to return the result according to the schema",
@@ -92,7 +96,7 @@ export const interpretUserMessage = (message: string): Promise<UserIntent> => {
     ["user", "{message}"],
     [
       "user",
-      "try to understand the user request, the main goal is to figure out if user is providing a bill detail about his latest shop, and return the intent based on the given schema",
+      "Analyze the user request to determine the intent. Return 'add-bill' if the user is describing ANY financial transaction including:\n• Shopping bills/receipts (expenses)\n• Income transactions\n• Money transfers between accounts\n• Lending or borrowing money\n• Debt payments\n• Any transaction with amounts, accounts, or financial details\n\nReturn 'general' only for non-financial conversations, questions, or commands.",
     ],
     ["system", "JSON result is:"],
   ]);

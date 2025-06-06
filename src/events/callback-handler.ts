@@ -40,8 +40,6 @@ function formatTransactionMessage(
   const amount =
     transactionData?.total_price || transactionData?.amount || "25.50";
   const date = formatDate(transactionData?.date);
-  const category = transactionData?.category || "Other";
-  const account = transactionData?.account || "Main Card";
   const currencySymbol = getCurrencySymbol(
     transactionData?.currency_code || "USD"
   );
@@ -49,13 +47,54 @@ function formatTransactionMessage(
   // Only show warning if provided (no warning means currency is supported)
   const warningText = warning ? `\n\n⚠️ ${warning}` : "";
 
-  return `💰 Amount: ${currencySymbol}${amount}
+  // Handle different transaction types with specific formatting
+  if (type === "transfer") {
+    const fromAccount =
+      transactionData?.account || transactionData?.from_account || "Main Card";
+    const toAccount =
+      transactionData?.destination_account ||
+      transactionData?.to_account ||
+      "Cash";
+    const fromCurrency = transactionData?.currency_code || "USD";
+    const toCurrency = transactionData?.destination_currency || fromCurrency;
+    const exchangeRate = transactionData?.exchange_rate || "1.0";
+    const destinationAmount =
+      transactionData?.destination_amount ||
+      (parseFloat(amount) / parseFloat(exchangeRate)).toFixed(2);
+    const fee = transactionData?.fee || 0;
+
+    const fromSymbol = getCurrencySymbol(fromCurrency);
+    const toSymbol = getCurrencySymbol(toCurrency);
+    const totalDeducted =
+      fee > 0 ? (parseFloat(amount) + parseFloat(fee)).toFixed(2) : amount;
+
+    let transferText = `📤 From: ${fromSymbol}${amount} ${fromCurrency} (${fromAccount})
+📥 To: ${toSymbol}${destinationAmount} ${toCurrency} (${toAccount})
+💱 Rate: ${exchangeRate} ${fromCurrency}/${toCurrency}
+📅 Date: ${date}`;
+
+    if (fee > 0) {
+      transferText += `\n💸 Fee: ${fromSymbol}${fee} ${fromCurrency}
+💰 Total Deducted: ${fromSymbol}${totalDeducted} ${fromCurrency}`;
+    }
+
+    return `${transferText}${warningText}
+
+---
+MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
+  } else {
+    // For expense and income transactions
+    const category = transactionData?.category || "Other";
+    const account = transactionData?.account || "Main Card";
+
+    return `💰 Amount: ${currencySymbol}${amount}
 📅 Date: ${date}
 📂 Category: ${category}
 💳 Account: ${account}${warningText}
 
 ---
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
+  }
 }
 
 /**
@@ -372,15 +411,52 @@ function registerCallbackHandler(bot: any) {
 
       // Retrieve existing transaction data from TempBills to preserve all fields
       let transactionData = {};
+      let transactionType = "expense"; // default
       try {
         const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
         if (tempBill && tempBill.transactionData) {
-          // Preserve all existing data and only update account/currency
-          transactionData = {
-            ...tempBill.transactionData,
-            account: accountName,
-            currency_code: accountCurrency,
-          };
+          transactionType =
+            tempBill.transactionData.transaction_type || "expense";
+
+          // For transfers, determine if this is FROM or TO account based on context
+          if (transactionType === "transfer") {
+            // Check if we came from EDIT_FROM or EDIT_TO callback
+            const isFromAccount = callback_data.includes("edit-from");
+            const isToAccount = callback_data.includes("edit-to");
+
+            if (isFromAccount) {
+              // Update FROM account (source)
+              transactionData = {
+                ...tempBill.transactionData,
+                account: accountName,
+                from_account: accountName,
+                currency_code: accountCurrency,
+              };
+            } else if (isToAccount) {
+              // Update TO account (destination)
+              transactionData = {
+                ...tempBill.transactionData,
+                destination_account: accountName,
+                to_account: accountName,
+                destination_currency: accountCurrency,
+              };
+            } else {
+              // Default to FROM account if context unclear
+              transactionData = {
+                ...tempBill.transactionData,
+                account: accountName,
+                from_account: accountName,
+                currency_code: accountCurrency,
+              };
+            }
+          } else {
+            // For expense/income transactions
+            transactionData = {
+              ...tempBill.transactionData,
+              account: accountName,
+              currency_code: accountCurrency,
+            };
+          }
 
           // Update TempBills with the new account information
           await googleSheetsAdapter.updateTempBill(transactionId, {
@@ -405,9 +481,21 @@ function registerCallbackHandler(bot: any) {
         };
       }
 
-      const keyboard = createExpenseKeyboard(transactionId, transactionData);
+      // Create appropriate keyboard based on transaction type
+      let keyboard;
+      switch (transactionType) {
+        case "income":
+          keyboard = createIncomeKeyboard(transactionId, transactionData);
+          break;
+        case "transfer":
+          keyboard = createTransferKeyboard(transactionId, transactionData);
+          break;
+        default: // expense and other types
+          keyboard = createExpenseKeyboard(transactionId, transactionData);
+      }
+
       const messageText = formatTransactionMessage(
-        "expense",
+        transactionType,
         transactionId,
         transactionData
       );
@@ -926,6 +1014,141 @@ MENU: Cancellation Confirmation 👇`;
       });
 
       bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    // PHASE 4: Transfer-specific callback handlers
+
+    // Handle transfer FROM account editing
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_FROM
+      ) &&
+      transactionId
+    ) {
+      // Get current transaction data to determine currency
+      let fromCurrency = "USD";
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill && tempBill.transactionData) {
+          fromCurrency = tempBill.transactionData.currency_code || "USD";
+        }
+      } catch (error) {
+        console.warn("Error getting transaction data for FROM account:", error);
+      }
+
+      const keyboard = await createAccountKeyboard(transactionId, fromCurrency);
+      const messageText = `📤 Select FROM Account for Transaction #${transactionId}`;
+
+      bot.editMessageText(messageText, {
+        chat_id: chatId,
+        message_id: message.message_id,
+        reply_markup: keyboard,
+      });
+
+      bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    // Handle transfer TO account editing
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_TO
+      ) &&
+      transactionId
+    ) {
+      // For TO account, we can allow any currency
+      const keyboard = await createAccountKeyboard(transactionId);
+      const messageText = `📥 Select TO Account for Transaction #${transactionId}`;
+
+      bot.editMessageText(messageText, {
+        chat_id: chatId,
+        message_id: message.message_id,
+        reply_markup: keyboard,
+      });
+
+      bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    // Handle exchange rate editing
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_EXCHANGE
+      ) &&
+      transactionId
+    ) {
+      // Send guide message for exchange rate input
+      const guideMessage = await bot.sendMessage(
+        chatId,
+        `💱 Send the exchange rate for transaction #${transactionId}
+
+Format: ${transactionId} [rate]
+Example: ${transactionId} 1.18
+
+Current rate will be used to calculate destination amount.`,
+        { parse_mode: "Markdown" }
+      );
+
+      // Track guide message for cleanup
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill) {
+          const currentGuideMessages = tempBill.guideMessageIds || [];
+          await googleSheetsAdapter.updateTempBill(transactionId, {
+            guideMessageIds: [...currentGuideMessages, guideMessage.message_id],
+          });
+        }
+      } catch (error) {
+        console.warn("Error tracking guide message:", error);
+      }
+
+      bot.answerCallbackQuery(query.id, {
+        text: "Send the exchange rate in the format shown below",
+      });
+      return;
+    }
+
+    // Handle transfer fee editing
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_FEE
+      ) &&
+      transactionId
+    ) {
+      // Send guide message for fee input
+      const guideMessage = await bot.sendMessage(
+        chatId,
+        `💸 Send the transfer fee for transaction #${transactionId}
+
+Format: ${transactionId} [fee_amount]
+Example: ${transactionId} 3.50
+To remove fee: ${transactionId} 0
+
+Fee will be added to the total amount deducted from source account.`,
+        { parse_mode: "Markdown" }
+      );
+
+      // Track guide message for cleanup
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill) {
+          const currentGuideMessages = tempBill.guideMessageIds || [];
+          await googleSheetsAdapter.updateTempBill(transactionId, {
+            guideMessageIds: [...currentGuideMessages, guideMessage.message_id],
+          });
+        }
+      } catch (error) {
+        console.warn("Error tracking guide message:", error);
+      }
+
+      bot.answerCallbackQuery(query.id, {
+        text: "Send the transfer fee in the format shown below",
+      });
       return;
     }
 

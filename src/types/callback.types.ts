@@ -17,6 +17,7 @@ export enum CallbackActions {
   EDIT_FROM = "edit-from",
   EDIT_TO = "edit-to",
   EDIT_EXCHANGE = "edit-exchange",
+  EDIT_FEE = "edit-fee",
   EDIT_CONTACT = "edit-contact",
   EDIT_PURPOSE = "edit-purpose",
   EDIT_DETAILS = "edit-details",
@@ -180,11 +181,11 @@ export const PLACEHOLDER_FEATURES = [
   CallbackActions.NEW_CATEGORY,
   CallbackActions.NEW_ACCOUNT,
 
-  // Phase 4 features
-  CallbackActions.EDIT_FROM,
-  CallbackActions.EDIT_TO,
-  CallbackActions.EDIT_EXCHANGE,
-  CallbackActions.EDIT_SOURCE,
+  // Phase 4 features - REMOVED: Transfer features now implemented
+  // CallbackActions.EDIT_FROM,
+  // CallbackActions.EDIT_TO,
+  // CallbackActions.EDIT_EXCHANGE,
+  // CallbackActions.EDIT_SOURCE,
 
   // Phase 5 features
   CallbackActions.EDIT_CONTACT,

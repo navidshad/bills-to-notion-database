@@ -5,7 +5,11 @@
 
 import { getReceiptDetail } from "../../utils/receipt-processor";
 import * as textChain from "../../text-chain";
-import { createExpenseKeyboard } from "../../keyboards/bill-keyboards";
+import {
+  createExpenseKeyboard,
+  createIncomeKeyboard,
+  createTransferKeyboard,
+} from "../../keyboards/bill-keyboards";
 import IDManager from "../../managers/id-manager";
 import GoogleSheetsAdapter from "../../adapters/google-sheets";
 
@@ -210,17 +214,34 @@ function registerAddCommand(bot: any) {
           [] // No guide messages yet
         );
 
-        // Create transaction message with expense keyboard
+        // Create transaction message with appropriate keyboard based on detected type
+        const transactionType =
+          validatedBillDetail.transaction_type || "expense";
         const transactionMessage = formatTransactionMessage(
-          "expense",
+          transactionType,
           transactionId,
           validatedBillDetail,
           currencyValidation.warning
         );
-        const keyboard = createExpenseKeyboard(
-          transactionId,
-          validatedBillDetail
-        );
+
+        // Select appropriate keyboard based on transaction type
+        let keyboard;
+        switch (transactionType) {
+          case "income":
+            keyboard = createIncomeKeyboard(transactionId, validatedBillDetail);
+            break;
+          case "transfer":
+            keyboard = createTransferKeyboard(
+              transactionId,
+              validatedBillDetail
+            );
+            break;
+          default:
+            keyboard = createExpenseKeyboard(
+              transactionId,
+              validatedBillDetail
+            );
+        }
 
         // Update the message with transaction details and keyboard
         bot.editMessageText(transactionMessage, {

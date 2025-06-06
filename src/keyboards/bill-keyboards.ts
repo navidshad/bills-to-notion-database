@@ -196,6 +196,22 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
     transactionData?.to_account ||
     "Cash";
   const exchangeRate = transactionData?.exchange_rate || "1.0";
+  const fee = transactionData?.fee || 0;
+  const fromCurrency = transactionData?.currency_code || "USD";
+  const toCurrency = transactionData?.destination_currency || fromCurrency;
+
+  // Calculate destination amount if exchange rate is available
+  const destinationAmount =
+    transactionData?.destination_amount ||
+    (parseFloat(amount) / parseFloat(exchangeRate)).toFixed(2);
+
+  // Format account names with currency codes
+  const fromAccountDisplay = `${fromAccount} (${fromCurrency})`;
+  const toAccountDisplay = `${toAccount} (${toCurrency})`;
+
+  // Show fee button only if fee exists, otherwise show "Add Fee"
+  const feeButtonText =
+    fee > 0 ? `💸 Fee: ${getCurrencySymbol(fromCurrency)}${fee}` : "💸 Add Fee";
 
   return {
     inline_keyboard: [
@@ -210,7 +226,7 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `💰 Amount: $${amount}`,
+          text: `💰 Amount: ${getCurrencySymbol(fromCurrency)}${amount}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_AMOUNT,
             transactionId
@@ -226,14 +242,14 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `📤 From: ${fromAccount}`,
+          text: `📤 From: ${fromAccountDisplay}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_FROM,
             transactionId
           ),
         },
         {
-          text: `📥 To: ${toAccount}`,
+          text: `📥 To: ${toAccountDisplay}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_TO,
             transactionId
@@ -242,9 +258,25 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `💱 Rate: ${exchangeRate}`,
+          text: `💱 Rate: ${exchangeRate} ${fromCurrency}/${toCurrency}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_EXCHANGE,
+            transactionId
+          ),
+        },
+      ],
+      [
+        {
+          text: feeButtonText,
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_FEE,
+            transactionId
+          ),
+        },
+        {
+          text: "🔄 Re-Calculate",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.RE_CALCULATE,
             transactionId
           ),
         },
@@ -608,15 +640,7 @@ const PLACEHOLDER_MESSAGES = {
   submit:
     "✅ **Phase 3 Feature**\n\nTransaction submission coming in Phase 3!\n\nCurrent Phase 2 Status:\n• TempBills system and submission logic will be implemented next\n• For now, transactions are auto-saved for testing",
 
-  // Phase 4 features - Transfer & Exchange
-  edit_from:
-    "📤 **Phase 4 Feature**\n\nTransfer source editing coming in Phase 4!\n\nUpcoming:\n• Full transfer functionality between accounts\n• Multi-currency support\n• Exchange rate management",
-
-  edit_to:
-    "📥 **Phase 4 Feature**\n\nTransfer destination editing coming in Phase 4!\n\nUpcoming:\n• Full transfer functionality between accounts\n• Multi-currency support\n• Balance tracking",
-
-  edit_exchange:
-    "💱 **Phase 4 Feature**\n\nExchange rate editing coming in Phase 4!\n\nUpcoming:\n• Real-time exchange rates\n• Multi-currency calculations\n• Currency conversion tracking",
+  // Phase 4 features - Transfer & Exchange implemented ✅
 
   edit_source:
     "💰 **Phase 4 Feature**\n\nIncome source editing coming in Phase 4!\n\nUpcoming:\n• Income source management\n• Recurring income detection\n• Advanced income categorization",
@@ -659,7 +683,7 @@ const PLACEHOLDER_MESSAGES = {
 
   // General fallback
   coming_soon:
-    "🚧 **Feature Coming Soon**\n\nThis feature is planned for a future phase.\n\nCurrent Status:\n• Phase 2 (Enhanced Keyboards) - ✅ Complete\n• Phase 3 (Input Collection) - 🚧 Next\n• Phase 4 (Transfers) - ⏳ Planned\n• Phase 5 (Debt Management) - ⏳ Planned\n• Phase 6 (Advanced Features) - ⏳ Planned",
+    "🚧 **Feature Coming Soon**\n\nThis feature is planned for a future phase.\n\nCurrent Status:\n• Phase 2 (Enhanced Keyboards) - ✅ Complete\n• Phase 3 (Input Collection) - 🚧 Next\n• Phase 4 (Transfers) - ✅ Complete\n• Phase 5 (Debt Management) - ⏳ Planned\n• Phase 6 (Advanced Features) - ⏳ Planned",
 };
 
 /**

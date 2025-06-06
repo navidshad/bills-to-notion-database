@@ -134,6 +134,7 @@ class GoogleSheetsAdapter {
       "Destination Amount",
       "Destination Currency",
       "Exchange Rate",
+      "Fee", // Phase 4: Transfer fee support
       "Payment Method",
       "Tags",
       "Notes",
@@ -143,7 +144,7 @@ class GoogleSheetsAdapter {
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `Bills_${currentYear}!A1:Q1`,
+      range: `Bills_${currentYear}!A1:R1`, // Updated to R1 to include Fee column
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -1025,6 +1026,7 @@ class GoogleSheetsAdapter {
         destination_amount: transactionData.destination_amount || "",
         destination_currency: transactionData.destination_currency || "",
         exchange_rate: transactionData.exchange_rate || "",
+        fee: transactionData.fee || "", // Phase 4: Transfer fee support
         payment_method: transactionData.payment_method || "",
         tags: transactionData.tags || "",
         notes: transactionData.notes || "",
@@ -1047,6 +1049,7 @@ class GoogleSheetsAdapter {
           yearlySheetRecord.destination_amount,
           yearlySheetRecord.destination_currency,
           yearlySheetRecord.exchange_rate,
+          yearlySheetRecord.fee, // Phase 4: Include fee in data
           yearlySheetRecord.payment_method,
           yearlySheetRecord.tags,
           yearlySheetRecord.notes,
@@ -1057,7 +1060,7 @@ class GoogleSheetsAdapter {
 
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!A:Q`,
+        range: `${sheetName}!A:R`, // Updated to R to include Fee column
         valueInputOption: "RAW",
         requestBody: { values },
       });
@@ -1103,7 +1106,7 @@ class GoogleSheetsAdapter {
       // Get all bills from the yearly sheet
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!A:Q`,
+        range: `${sheetName}!A:R`, // Updated to R to include Fee column
       });
 
       const rows = response.data.values;
@@ -1136,6 +1139,7 @@ class GoogleSheetsAdapter {
             destination_amount: bill.destination_amount,
             destination_currency: bill.destination_currency,
             exchange_rate: bill.exchange_rate,
+            fee: bill.fee || "", // Phase 4: Include fee data
             payment_method: bill.payment_method,
             tags: bill.tags,
             notes: bill.notes,
@@ -1167,7 +1171,7 @@ class GoogleSheetsAdapter {
       // Get all bills from the yearly sheet to find the row
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!A:Q`,
+        range: `${sheetName}!A:R`, // Updated to R to include Fee column
       });
 
       const rows = response.data.values;
@@ -1206,10 +1210,11 @@ class GoogleSheetsAdapter {
           transactionData.destination_amount || "",
           transactionData.destination_currency || "",
           transactionData.exchange_rate || "",
+          transactionData.fee || "", // Phase 4: Include fee data
           transactionData.payment_method || "",
           transactionData.tags || "",
           transactionData.notes || "",
-          rows[rowIndex - 1][15] || "", // Keep original created_at
+          rows[rowIndex - 1][16] || "", // Keep original created_at (adjusted index)
           new Date().toISOString(), // Update updated_at
         ],
       ];
@@ -1217,7 +1222,7 @@ class GoogleSheetsAdapter {
       // Update the specific row
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!A${rowIndex}:Q${rowIndex}`,
+        range: `${sheetName}!A${rowIndex}:R${rowIndex}`, // Updated to R to include Fee column
         valueInputOption: "RAW",
         requestBody: { values: updatedValues },
       });
@@ -1267,6 +1272,7 @@ class GoogleSheetsAdapter {
         destination_amount: bill.destination_amount,
         destination_currency: bill.destination_currency,
         exchange_rate: bill.exchange_rate,
+        fee: bill.fee, // Phase 4: Include fee data
         payment_method: bill.payment_method,
         tags: bill.tags,
         notes: bill.notes,
