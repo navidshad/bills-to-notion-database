@@ -1334,25 +1334,155 @@ Bot: ✅ Expense #100 | $30.00 | Food | Main Card | Jan 15, 2024
 - **Same Message Updates**: No message proliferation, original message gets updated
 - **Seamless Edit Cycle**: Edit feels natural, like re-opening the original transaction
 
-### Phase 4: Transfer & Exchange Keyboards
-**Deliverable**: Complete financial transaction keyboards
+### Phase 4: Transfer Enhancement & Currency Exchange
+**Deliverable**: Enhanced transfer functionality with currency exchange and optional fees
 
-**Keyboard Focus**: Transfer and currency exchange keyboards
+**Scope Refinement**: Current transfer keyboard is functional - focus on enhancement and multi-currency support
 ```
-🎯 TARGET KEYBOARDS:
-├── 🔄 Transfer Keyboard (From/To Accounts)
-├── 💱 Currency Exchange Keyboard (Rates, Multi-currency)
-└── 🧮 Calculation Keyboards (Auto-calculation features)
+🎯 PHASE 4 OBJECTIVES:
+├── 🔄 Enhanced Transfer Features (Optional transfer fees)
+├── 💱 Currency Exchange Support (User-provided exchange rates)
+├── 🔧 Transfer Polish & Optimization (Better UX and validation)
+└── 📊 Multi-Currency Display (Clear source/destination amounts)
 ```
+
+**Core Features**:
+- **✅ Keep Current Transfer Keyboard** - Basic functionality working well
+- **➕ Add Optional Transfer Fees** - Additional cost field for transfer charges
+- **💱 Multi-Currency Transfers** - USD account → EUR account with exchange rates
+- **📊 Enhanced Display** - Clear visualization of both currencies and amounts
+- **🔧 Polish & Validation** - Better error handling and user experience
 
 **Implementation Tasks**:
-- [ ] Add transfer transaction type support
-- [ ] Create transfer-specific keyboards
-- [ ] Implement currency exchange functionality
-- [ ] Add exchange rate calculation
-- [ ] Create multi-currency account selection
-- [ ] Add transfer validation logic
-- [ ] Update AI chains for transfer detection
+- [ ] Add optional transfer fee field to transfer transactions
+- [ ] Enhance currency exchange visualization in transfer keyboard
+- [ ] Improve transfer message display to show both source and destination clearly
+- [ ] Add validation for currency exchange rates (user-provided)
+- [ ] Polish transfer keyboard UX and error messages
+- [ ] Update transfer data schema to properly handle fees
+- [ ] Use currency codes beside account labels in keyboards (e.g., "Main Card (USD)", "Euro Cash (EUR)")
+- [ ] Test multi-currency transfer scenarios
+
+**Transfer Enhancement Examples**:
+```typescript
+// Enhanced Transfer Display:
+📤 From: $100.00 USD (Main Card)
+📥 To: €85.00 EUR (Euro Cash)
+💱 Rate: 1.18 USD/EUR
+💸 Fee: $3.00 USD
+💰 Total Deducted: $103.00 USD
+
+// Account Selection with Currency Codes:
+┌─────────────────────────────────────────┐
+│ 📤 From Account:                        │
+│ 💳 Main Card (USD)    💳 Business (USD) │
+│ 🏦 Savings (USD)      💰 Euro Cash (EUR)│
+│ 🇬🇧 UK Account (GBP)  🇯🇵 Yen Card (JPY)│
+└─────────────────────────────────────────┘
+
+// Optional Fee Scenarios:
+- Bank transfer fees
+- ATM withdrawal charges  
+- Currency exchange fees
+- Wire transfer costs
+```
+
+**Key Implementation Notes**:
+- **Transfer fees are optional** - Most transfers won't have fees
+- **User provides exchange rates** - No API integration needed
+- **Account-to-account only** - Transfers are between user's own accounts
+- **Fees deducted from source** - Fee amount reduces source account by fee + transfer amount
+- **Dashboard calculations later** - No complex balance tracking in Phase 4
+
+**Test Checklist**:
+```
+🧪 Manual Test Checklist - Phase 4
+┌────────────────────────────────────────┐
+│ Test 1: Enhanced Transfer Display       │
+├────────────────────────────────────────┤
+│ [ ] Transfer shows clear From/To amounts │
+│ [ ] Currency symbols display correctly  │
+│ [ ] Exchange rate field editable        │
+│ [ ] Destination amount calculated properly │
+│ [ ] Multi-currency keyboard layout clean │
+│                                        │
+│ Test 2: Optional Transfer Fees         │
+├────────────────────────────────────────┤
+│ [ ] Fee field is optional (can be empty) │
+│ [ ] Fee amount added to total deducted  │
+│ [ ] Transfer with fee saves correctly   │
+│ [ ] Transfer without fee works normally │
+│ [ ] Fee calculation shown in summary    │
+│                                        │
+│ Test 3: Currency Exchange              │
+├────────────────────────────────────────┤
+│ [ ] User can input custom exchange rate │
+│ [ ] Rate validation prevents invalid values │
+│ [ ] Multi-currency accounts supported  │
+│ [ ] Exchange calculation accurate       │
+│ [ ] Both currencies saved to sheet     │
+│                                        │
+│ Test 4: Transfer Polish & UX          │
+├────────────────────────────────────────┤
+│ [ ] Error messages helpful and clear   │
+│ [ ] Transfer validation prevents errors │
+│ [ ] Keyboard navigation smooth         │
+│ [ ] Edit flow works for all transfer fields │
+│ [ ] Transfer submission reliable        │
+│                                        │
+│ Test 5: Data Integrity                │
+├────────────────────────────────────────┤
+│ [ ] All transfer fields saved correctly │
+│ [ ] Fee data preserved in Google Sheets │
+│ [ ] Exchange rate data accurate        │
+│ [ ] No data loss during edit cycles    │
+│ [ ] Transfer IDs consistent with system │
+│                                        │
+│ Test 6: Multi-Currency Scenarios      │
+├────────────────────────────────────────┤
+│ [ ] USD → EUR transfer with fee works  │
+│ [ ] Same currency transfer (no exchange) │
+│ [ ] Complex exchange rates (e.g., 1.234) │
+│ [ ] Large amounts formatted correctly  │
+│ [ ] Multiple currency accounts supported │
+└────────────────────────────────────────┘
+```
+
+**Example Enhanced Transfer Flow**:
+```
+User: /add Transfer $100 from card to euro cash
+Bot: 📤 From: $100.00 USD (Main Card)
+     📥 To: €0.00 EUR (Euro Cash)
+     💱 Rate: 1.0 USD/EUR
+     💸 Fee: (none)
+     
+     ---
+     MENU: 🔄 Transfer Transaction #100 👇
+     
+     [📤 From: Main Card (USD)    📥 To: Euro Cash (EUR)]
+     [💱 Rate: 1.0   💸 Add Fee   🔄 Re-Calculate]
+
+User: [Clicks "💱 Edit Rate"]
+Bot: 💱 Send the exchange rate for transaction #100  ← AUTO-DELETED
+     Format: 100 1.18                               ← AUTO-DELETED
+
+User: 100 1.18                                      ← AUTO-DELETED
+Bot: 📤 From: $100.00 USD (Main Card)                ← Updated display
+     📥 To: €84.75 EUR (Euro Cash)                   ← Auto-calculated
+     💱 Rate: 1.18 USD/EUR
+     💸 Fee: (none)
+
+User: [Clicks "💸 Add Fee"]
+Bot: 💸 Send the transfer fee for transaction #100   ← AUTO-DELETED
+User: 100 3.00                                      ← AUTO-DELETED
+Bot: 📤 From: $100.00 USD (Main Card)
+     📥 To: €84.75 EUR (Euro Cash)
+     💱 Rate: 1.18 USD/EUR
+     💸 Fee: $3.00 USD
+     💰 Total Deducted: $103.00 USD
+
+Final Result: Clean transfer with proper currency handling and optional fees
+```
 
 ### Phase 5: Debt Management Keyboards
 **Deliverable**: Complete personal debt tracking with specialized keyboards
