@@ -989,6 +989,310 @@ class GoogleSheetsAdapter {
       throw error;
     }
   }
+
+  /**
+   * Submit a bill from TempBills to yearly sheet (Phase 3)
+   */
+  async submitBillToYearlySheet(
+    billId: number
+  ): Promise<{ success: boolean; yearlySheetRecord?: any; error?: string }> {
+    try {
+      // Get the temp bill data
+      const tempBill = await this.getTempBill(billId);
+      if (!tempBill || !tempBill.transactionData) {
+        return { success: false, error: `TempBill #${billId} not found` };
+      }
+
+      const transactionData = tempBill.transactionData;
+      const currentYear = new Date().getFullYear();
+      const sheetName = `Bills_${currentYear}`;
+
+      // Ensure the yearly sheet exists
+      await this.ensureYearlySheetExists(currentYear);
+
+      // Convert temp bill to yearly sheet format
+      const yearlySheetRecord = {
+        id: billId, // Keep the same ID
+        date: transactionData.date || new Date().toISOString().split("T")[0],
+        title:
+          transactionData.title || transactionData.description || "Expense",
+        amount: transactionData.amount || transactionData.total_price || 0,
+        currency: transactionData.currency_code || "USD",
+        category: transactionData.category || "Other",
+        transaction_type: transactionData.transaction_type || "expense",
+        account: transactionData.account || "Main Card",
+        destination_account: transactionData.destination_account || "",
+        destination_amount: transactionData.destination_amount || "",
+        destination_currency: transactionData.destination_currency || "",
+        exchange_rate: transactionData.exchange_rate || "",
+        payment_method: transactionData.payment_method || "",
+        tags: transactionData.tags || "",
+        notes: transactionData.notes || "",
+        created_at: tempBill.created_at,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Add to yearly sheet
+      const values = [
+        [
+          yearlySheetRecord.id,
+          yearlySheetRecord.date,
+          yearlySheetRecord.title,
+          yearlySheetRecord.amount,
+          yearlySheetRecord.currency,
+          yearlySheetRecord.category,
+          yearlySheetRecord.transaction_type,
+          yearlySheetRecord.account,
+          yearlySheetRecord.destination_account,
+          yearlySheetRecord.destination_amount,
+          yearlySheetRecord.destination_currency,
+          yearlySheetRecord.exchange_rate,
+          yearlySheetRecord.payment_method,
+          yearlySheetRecord.tags,
+          yearlySheetRecord.notes,
+          yearlySheetRecord.created_at,
+          yearlySheetRecord.updated_at,
+        ],
+      ];
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A:Q`,
+        valueInputOption: "RAW",
+        requestBody: { values },
+      });
+
+      // Remove from TempBills
+      await this.deleteTempBill(billId);
+
+      console.log(`Bill #${billId} successfully submitted to ${sheetName}`);
+      return { success: true, yearlySheetRecord };
+    } catch (error) {
+      console.error(`Error submitting bill #${billId} to yearly sheet:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Get a bill from yearly sheet by ID (Phase 3)
+   */
+  async getBillFromYearlySheet(
+    billId: number,
+    year?: number
+  ): Promise<any | null> {
+    try {
+      const targetYear = year || new Date().getFullYear();
+      const sheetName = `Bills_${targetYear}`;
+
+      // Check if sheet exists
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+
+      const sheetExists = spreadsheetInfo.data.sheets.some(
+        (sheet: any) => sheet.properties.title === sheetName
+      );
+
+      if (!sheetExists) {
+        return null;
+      }
+
+      // Get all bills from the yearly sheet
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A:Q`,
+      });
+
+      const rows = response.data.values;
+      if (!rows || rows.length <= 1) {
+        return null;
+      }
+
+      // Find the bill by ID (skip header row)
+      const headers = rows[0];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row[0] && parseInt(row[0]) === billId) {
+          // Convert row to object
+          const bill: any = {};
+          headers.forEach((header: string, index: number) => {
+            bill[header.toLowerCase().replace(/\s+/g, "_")] = row[index] || "";
+          });
+
+          // Convert to consistent format
+          return {
+            id: parseInt(bill.id),
+            date: bill.date,
+            title: bill["title/description"] || bill.title,
+            amount: parseFloat(bill.amount) || 0,
+            currency_code: bill.currency,
+            category: bill.category,
+            transaction_type: bill.transaction_type,
+            account: bill.account,
+            destination_account: bill.destination_account,
+            destination_amount: bill.destination_amount,
+            destination_currency: bill.destination_currency,
+            exchange_rate: bill.exchange_rate,
+            payment_method: bill.payment_method,
+            tags: bill.tags,
+            notes: bill.notes,
+            created_at: bill.created_at,
+            updated_at: bill.updated_at,
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error getting bill #${billId} from yearly sheet:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Update/replace a bill in yearly sheet (Phase 3 - for edit flow)
+   */
+  async updateBillInYearlySheet(
+    billId: number,
+    transactionData: any,
+    year?: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const targetYear = year || new Date().getFullYear();
+      const sheetName = `Bills_${targetYear}`;
+
+      // Get all bills from the yearly sheet to find the row
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A:Q`,
+      });
+
+      const rows = response.data.values;
+      if (!rows || rows.length <= 1) {
+        return { success: false, error: `No bills found in ${sheetName}` };
+      }
+
+      // Find the row index for this bill ID
+      let rowIndex = -1;
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] && parseInt(rows[i][0]) === billId) {
+          rowIndex = i + 1; // Google Sheets is 1-indexed
+          break;
+        }
+      }
+
+      if (rowIndex === -1) {
+        return {
+          success: false,
+          error: `Bill #${billId} not found in ${sheetName}`,
+        };
+      }
+
+      // Prepare updated values
+      const updatedValues = [
+        [
+          billId, // Keep the same ID
+          transactionData.date || new Date().toISOString().split("T")[0],
+          transactionData.title || transactionData.description || "Expense",
+          transactionData.amount || transactionData.total_price || 0,
+          transactionData.currency_code || "USD",
+          transactionData.category || "Other",
+          transactionData.transaction_type || "expense",
+          transactionData.account || "Main Card",
+          transactionData.destination_account || "",
+          transactionData.destination_amount || "",
+          transactionData.destination_currency || "",
+          transactionData.exchange_rate || "",
+          transactionData.payment_method || "",
+          transactionData.tags || "",
+          transactionData.notes || "",
+          rows[rowIndex - 1][15] || "", // Keep original created_at
+          new Date().toISOString(), // Update updated_at
+        ],
+      ];
+
+      // Update the specific row
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A${rowIndex}:Q${rowIndex}`,
+        valueInputOption: "RAW",
+        requestBody: { values: updatedValues },
+      });
+
+      console.log(`Bill #${billId} successfully updated in ${sheetName}`);
+      return { success: true };
+    } catch (error) {
+      console.error(`Error updating bill #${billId} in yearly sheet:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Copy a bill from yearly sheet back to TempBills for editing (Phase 3)
+   */
+  async copyBillToTempBills(
+    billId: number,
+    userId: string,
+    originalMessageId: number,
+    year?: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get the bill from yearly sheet
+      const bill = await this.getBillFromYearlySheet(billId, year);
+      if (!bill) {
+        return {
+          success: false,
+          error: `Bill #${billId} not found in yearly sheet`,
+        };
+      }
+
+      // Convert to transaction data format
+      const transactionData = {
+        amount: bill.amount,
+        total_price: bill.amount,
+        currency_code: bill.currency_code,
+        date: bill.date,
+        title: bill.title,
+        description: bill.title,
+        category: bill.category,
+        transaction_type: bill.transaction_type,
+        account: bill.account,
+        destination_account: bill.destination_account,
+        destination_amount: bill.destination_amount,
+        destination_currency: bill.destination_currency,
+        exchange_rate: bill.exchange_rate,
+        payment_method: bill.payment_method,
+        tags: bill.tags,
+        notes: bill.notes,
+      };
+
+      // Save to TempBills with same ID
+      await this.saveTempBill(
+        billId,
+        userId,
+        transactionData,
+        originalMessageId,
+        []
+      );
+
+      console.log(
+        `Bill #${billId} copied from yearly sheet to TempBills for editing`
+      );
+      return { success: true };
+    } catch (error) {
+      console.error(`Error copying bill #${billId} to TempBills:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 }
 
 export default new GoogleSheetsAdapter();

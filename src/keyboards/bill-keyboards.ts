@@ -697,6 +697,110 @@ function formatDateForButton(date: any): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/**
+ * Create simplified keyboard for submitted bills (Phase 3)
+ */
+function createSubmittedBillKeyboard(transactionId: number) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: "✏️ Edit Transaction",
+          callback_data: CallbackDataGenerator.forTransaction(
+            CallbackActions.EDIT_TRANSACTION,
+            transactionId
+          ),
+        },
+      ],
+    ],
+  };
+}
+
+/**
+ * Format submitted bill message text (Phase 3)
+ */
+function formatSubmittedBillMessage(transactionData: any): string {
+  const typeEmoji = getTransactionTypeEmoji(
+    transactionData.transaction_type || "expense"
+  );
+  const typeName = getTransactionTypeName(
+    transactionData.transaction_type || "expense"
+  );
+  const amount =
+    transactionData.amount || transactionData.total_price || "0.00";
+  const category = transactionData.category || "Other";
+  const account = transactionData.account || "Main Card";
+  const date = formatDateForDisplay(transactionData.date);
+  const currencySymbol = getCurrencySymbol(
+    transactionData.currency_code || "USD"
+  );
+
+  return `✅ ${typeName} #${transactionData.id} | ${currencySymbol}${amount} | ${category} | ${account} | ${date}`;
+}
+
+/**
+ * Get transaction type emoji
+ */
+function getTransactionTypeEmoji(type: string): string {
+  const emojis: Record<string, string> = {
+    expense: "💸",
+    income: "💰",
+    transfer: "🔄",
+    lend: "🤝",
+    borrow: "🙏",
+    debt_payment: "💳",
+    debt_received: "💵",
+  };
+  return emojis[type] || "💸";
+}
+
+/**
+ * Get transaction type name
+ */
+function getTransactionTypeName(type: string): string {
+  const names: Record<string, string> = {
+    expense: "Expense",
+    income: "Income",
+    transfer: "Transfer",
+    lend: "Lend Money",
+    borrow: "Borrow Money",
+    debt_payment: "Debt Payment",
+    debt_received: "Debt Received",
+  };
+  return names[type] || "Expense";
+}
+
+/**
+ * Get currency symbol
+ */
+function getCurrencySymbol(currencyCode: string): string {
+  const symbols: Record<string, string> = {
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    GEL: "₾",
+    CAD: "C$",
+    AUD: "A$",
+  };
+  return symbols[currencyCode] || currencyCode + " ";
+}
+
+/**
+ * Format date for display in submitted bills
+ */
+function formatDateForDisplay(date: any): string {
+  if (!date) return new Date().toLocaleDateString();
+  if (typeof date === "string") {
+    try {
+      return new Date(date).toLocaleDateString();
+    } catch {
+      return date;
+    }
+  }
+  return date.toLocaleDateString();
+}
+
 export {
   createExpenseKeyboard,
   createIncomeKeyboard,
@@ -709,4 +813,6 @@ export {
   handlePlaceholderButton,
   formatDateForButton,
   PLACEHOLDER_MESSAGES,
+  createSubmittedBillKeyboard,
+  formatSubmittedBillMessage,
 };

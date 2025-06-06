@@ -42,6 +42,7 @@ export enum CallbackActions {
   SUBMIT = "submit",
   CONFIRM = "confirm",
   CONFIRM_CANCEL = "confirm-cancel",
+  EDIT_TRANSACTION = "edit-transaction", // Phase 3: Edit submitted bills
 
   // Navigation
   BACK_TRANSACTION = "back-transaction",
@@ -172,13 +173,12 @@ export class CallbackDataParser {
  * Placeholder features list for Phase 3+ development
  */
 export const PLACEHOLDER_FEATURES = [
-  // Phase 3 features
+  // Phase 3 features (SUBMIT removed - now implemented)
   CallbackActions.EDIT_AMOUNT,
   CallbackActions.EDIT_DATE,
   CallbackActions.EDIT_DETAILS,
   CallbackActions.NEW_CATEGORY,
   CallbackActions.NEW_ACCOUNT,
-  CallbackActions.SUBMIT,
 
   // Phase 4 features
   CallbackActions.EDIT_FROM,

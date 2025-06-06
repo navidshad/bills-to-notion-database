@@ -15,6 +15,8 @@ import {
   createCategoryKeyboard,
   createAccountKeyboard,
   handlePlaceholderButton,
+  createSubmittedBillKeyboard,
+  formatSubmittedBillMessage,
 } from "../keyboards/bill-keyboards";
 import {
   CallbackActions,
@@ -22,6 +24,7 @@ import {
   PLACEHOLDER_FEATURES,
   isPlaceholderFeature,
 } from "../types/callback.types";
+import BillManager, { BillState } from "../managers/bill-manager";
 
 /**
  * Format transaction message with details for display
@@ -565,6 +568,194 @@ function registerCallbackHandler(bot: any) {
       return;
     }
 
+    // Handle submit button - Phase 3 Implementation
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.SUBMIT
+      ) &&
+      transactionId
+    ) {
+      console.log(`Processing submit for transaction #${transactionId}`);
+
+      try {
+        // Check if this is a resubmission (editing flow) or initial submission
+        const billState = await BillManager.getBillState(transactionId);
+        let submitResult;
+
+        if (billState === BillState.EDITING) {
+          // This is a resubmission - update existing bill in yearly sheet
+          submitResult = await BillManager.resubmitEditedBill(transactionId);
+        } else {
+          // This is initial submission - move from TempBills to yearly sheet
+          submitResult = await BillManager.submitBill(transactionId);
+        }
+
+        if (submitResult.success) {
+          // Get the final bill data for display
+          let finalBillData;
+          if (billState === BillState.EDITING) {
+            // For resubmissions, get the updated data from yearly sheet
+            finalBillData = await googleSheetsAdapter.getBillFromYearlySheet(
+              transactionId
+            );
+          } else {
+            // For initial submissions, use the returned data
+            finalBillData = (submitResult as any).submittedBill;
+          }
+
+          if (finalBillData) {
+            // Update message to show submitted bill format
+            const submittedBillMessage =
+              formatSubmittedBillMessage(finalBillData);
+            const submittedBillKeyboard =
+              createSubmittedBillKeyboard(transactionId);
+
+            bot.editMessageText(submittedBillMessage, {
+              chat_id: chatId,
+              message_id: message.message_id,
+              reply_markup: submittedBillKeyboard,
+            });
+
+            const actionText =
+              billState === BillState.EDITING ? "updated" : "submitted";
+            bot.answerCallbackQuery(query.id, {
+              text: `Transaction #${transactionId} ${actionText} successfully!`,
+            });
+
+            console.log(
+              `Transaction #${transactionId} ${actionText} and message updated`
+            );
+          } else {
+            bot.answerCallbackQuery(query.id, {
+              text: "Transaction processed but display error occurred",
+              show_alert: true,
+            });
+          }
+        } else {
+          // Handle submission error
+          bot.answerCallbackQuery(query.id, {
+            text: `Error submitting transaction: ${submitResult.error}`,
+            show_alert: true,
+          });
+
+          console.error(
+            `Error submitting transaction #${transactionId}:`,
+            submitResult.error
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Error in submit handler for transaction #${transactionId}:`,
+          error
+        );
+        bot.answerCallbackQuery(query.id, {
+          text: "An unexpected error occurred while submitting",
+          show_alert: true,
+        });
+      }
+
+      return;
+    }
+
+    // Handle edit transaction button for submitted bills - Phase 3 Implementation
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_TRANSACTION
+      ) &&
+      transactionId
+    ) {
+      console.log(
+        `Starting edit flow for submitted transaction #${transactionId}`
+      );
+
+      try {
+        const userId = query.from.id.toString();
+        const originalMessageId = message.message_id;
+
+        // Start edit flow using BillManager
+        const editResult = await BillManager.startEditFlow(
+          transactionId,
+          userId,
+          originalMessageId
+        );
+
+        if (editResult.success) {
+          // Get the transaction data from TempBills to show edit keyboard
+          const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+          if (tempBill && tempBill.transactionData) {
+            const transactionData = tempBill.transactionData;
+            const transactionType =
+              transactionData.transaction_type || "expense";
+
+            // Create the appropriate keyboard based on transaction type
+            let keyboard;
+            switch (transactionType) {
+              case "income":
+                keyboard = createIncomeKeyboard(transactionId, transactionData);
+                break;
+              case "transfer":
+                keyboard = createTransferKeyboard(
+                  transactionId,
+                  transactionData
+                );
+                break;
+              default: // expense and other types
+                keyboard = createExpenseKeyboard(
+                  transactionId,
+                  transactionData
+                );
+            }
+
+            const messageText = formatTransactionMessage(
+              transactionType,
+              transactionId,
+              transactionData
+            );
+
+            bot.editMessageText(messageText, {
+              chat_id: chatId,
+              message_id: message.message_id,
+              reply_markup: keyboard,
+            });
+
+            bot.answerCallbackQuery(query.id, {
+              text: `Editing transaction #${transactionId}`,
+            });
+
+            console.log(`Transaction #${transactionId} edit flow started`);
+          } else {
+            bot.answerCallbackQuery(query.id, {
+              text: "Error loading transaction data for editing",
+              show_alert: true,
+            });
+          }
+        } else {
+          bot.answerCallbackQuery(query.id, {
+            text: `Error starting edit: ${editResult.error}`,
+            show_alert: true,
+          });
+
+          console.error(
+            `Error starting edit flow for transaction #${transactionId}:`,
+            editResult.error
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Error in edit transaction handler for #${transactionId}:`,
+          error
+        );
+        bot.answerCallbackQuery(query.id, {
+          text: "An unexpected error occurred while starting edit",
+          show_alert: true,
+        });
+      }
+
+      return;
+    }
+
     // Handle cancel button - show confirmation
     if (
       CallbackDataParser.startsWithAction(
@@ -591,7 +782,7 @@ MENU: Cancellation Confirmation 👇`;
       return;
     }
 
-    // Handle cancel confirmation
+    // Handle cancel confirmation - Phase 3 Enhanced
     if (
       CallbackDataParser.startsWithAction(
         callback_data,
@@ -599,28 +790,89 @@ MENU: Cancellation Confirmation 👇`;
       ) &&
       transactionId
     ) {
-      // Delete from TempBills sheet
+      console.log(
+        `Processing cancel confirmation for transaction #${transactionId}`
+      );
+
       try {
-        await googleSheetsAdapter.deleteTempBill(transactionId);
-        console.log(`Transaction #${transactionId} deleted from TempBills`);
+        // Check if this bill is being edited (from yearly sheet)
+        const billState = await BillManager.getBillState(transactionId);
+
+        if (billState === BillState.EDITING) {
+          // Cancel edit flow and restore to submitted state
+          const cancelResult = await BillManager.cancelEditFlow(transactionId);
+
+          if (cancelResult.success) {
+            // Get the original bill data from yearly sheet to restore message
+            const originalBill =
+              await googleSheetsAdapter.getBillFromYearlySheet(transactionId);
+
+            if (originalBill) {
+              const submittedBillMessage =
+                formatSubmittedBillMessage(originalBill);
+              const submittedBillKeyboard =
+                createSubmittedBillKeyboard(transactionId);
+
+              bot.editMessageText(submittedBillMessage, {
+                chat_id: chatId,
+                message_id: message.message_id,
+                reply_markup: submittedBillKeyboard,
+              });
+
+              bot.answerCallbackQuery(query.id, {
+                text: `Edit cancelled. Transaction #${transactionId} restored.`,
+              });
+
+              console.log(
+                `Edit flow cancelled for transaction #${transactionId}, restored to submitted state`
+              );
+            } else {
+              // Fallback if original bill not found
+              bot.editMessageText(
+                `❌ Edit cancelled for transaction #${transactionId}.`,
+                {
+                  chat_id: chatId,
+                  message_id: message.message_id,
+                }
+              );
+            }
+          } else {
+            bot.answerCallbackQuery(query.id, {
+              text: `Error cancelling edit: ${cancelResult.error}`,
+              show_alert: true,
+            });
+          }
+        } else {
+          // Regular temp bill cancellation (original behavior)
+          await googleSheetsAdapter.deleteTempBill(transactionId);
+          console.log(`Transaction #${transactionId} deleted from TempBills`);
+
+          bot.deleteMessage(chatId, message.message_id).catch(() => {
+            // If deletion fails, edit the message instead
+            bot.editMessageText(
+              `❌ Transaction #${transactionId} has been cancelled and deleted.`,
+              {
+                chat_id: chatId,
+                message_id: message.message_id,
+              }
+            );
+          });
+
+          bot.answerCallbackQuery(query.id, {
+            text: `Transaction #${transactionId} cancelled`,
+          });
+        }
       } catch (error) {
-        console.error("Error deleting from TempBills:", error);
+        console.error(
+          `Error in cancel confirmation for transaction #${transactionId}:`,
+          error
+        );
+        bot.answerCallbackQuery(query.id, {
+          text: "An error occurred while cancelling",
+          show_alert: true,
+        });
       }
 
-      bot.deleteMessage(chatId, message.message_id).catch(() => {
-        // If deletion fails, edit the message instead
-        bot.editMessageText(
-          `❌ Transaction #${transactionId} has been cancelled and deleted.`,
-          {
-            chat_id: chatId,
-            message_id: message.message_id,
-          }
-        );
-      });
-
-      bot.answerCallbackQuery(query.id, {
-        text: `Transaction #${transactionId} cancelled`,
-      });
       return;
     }
 
