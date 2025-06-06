@@ -525,7 +525,6 @@ const debtPatterns = [
 ```typescript
 interface Config {
   user_preferences: {
-    default_currency: string;      // "USD"
     default_account: string;       // "Main Card"
     default_category: string;      // "Other"
     timezone: string;              // "UTC"
@@ -998,15 +997,52 @@ function handlePlaceholderButton(callback_data: string): string {
 
 **Status**: ✅ **COMPLETE**
 
-### Phase 2: Command Structure & Primary Keyboards ✅ COMPLETED
-**Deliverable**: `/add` command with enhanced transaction keyboards
+---
 
-**Keyboard Focus**: Full primary keyboards for each transaction type
+## 🚀 **CURRENT IMPLEMENTATION STATUS (Updated)**
+
+### **✅ Phase 2 - COMPLETED & READY FOR USE**
+**What's Working Now:**
+- 💸 **Expense Transactions** - Full keyboard, category/account selection
+- 💰 **Income Transactions** - Full keyboard, source account management  
+- 🔄 **Transfer Transactions** - Full keyboard, multi-account transfers
+- 📋 **TempBills System** - Transaction data persistence during editing
+- 🔢 **Numeric ID System** - Sequential transaction IDs starting from 100
+- 📞 **/pending Command** - List all active temporary bills
+- 🔄 **Data Persistence** - Account/type switching preserves all data
+- 🚫 **Debt Types Disabled** - Properly commented out until Phase 5
+
+**🔧 Recent Fixes Applied:**
+- ✅ **Fixed transaction data loss** when switching accounts (amount preservation)
+- ✅ **Fixed transaction data loss** when switching transaction types (all data preserved)
+- ✅ **Removed confusing debt type buttons** until proper Phase 5 implementation
+- ✅ **Added helpful placeholder messages** for Phase 5 debt features
+- ✅ **Implemented proper TempBills system** for transaction data persistence
+- ✅ **Added /pending command** to list active temporary bills
+
+**Current Transaction Types Available:**
+| Type            | Status        | Features                                    |
+| --------------- | ------------- | ------------------------------------------- |
+| 💸 Expense       | ✅ **Active**  | Amount, Date, Category, Account selection   |
+| 💰 Income        | ✅ **Active**  | Amount, Date, Source account selection      |
+| 🔄 Transfer      | ✅ **Active**  | Amount, From/To accounts, exchange rates    |
+| 🤝 Lend Money    | 🚧 **Phase 5** | Disabled - Proper contact management needed |
+| 🙏 Borrow Money  | 🚧 **Phase 5** | Disabled - Debt tracking system needed      |
+| 💳 Debt Payment  | 🚧 **Phase 5** | Disabled - Payment history needed           |
+| 💵 Debt Received | 🚧 **Phase 5** | Disabled - Lending relationship needed      |
+
+---
+
+### Phase 2: Command Structure & Primary Keyboards ✅ COMPLETED
+**Deliverable**: `/add` command with enhanced transaction keyboards and TempBills system
+
+**Keyboard Focus**: Full primary keyboards for implemented transaction types
 ```
 🎯 TARGET KEYBOARDS:
 ├── 💸 Expense Keyboard (Amount, Date, Category, Account)
 ├── 💰 Income Keyboard (Amount, Date, Source Account)
-└── 🔄 Transfer Keyboard (Amount, From/To Accounts, Exchange Rate)
+├── 🔄 Transfer Keyboard (Amount, From/To Accounts, Exchange Rate)
+└── 🏷️ Transaction Type Selection (Expense, Income, Transfer)
 ```
 
 **Implementation Tasks**:
@@ -1017,6 +1053,10 @@ function handlePlaceholderButton(callback_data: string): string {
 - [x] Add keyboard callback handling (src/events/callback-handler.ts)
 - [x] Update AI chains with enhanced bill schema
 - [x] **NEW**: Implement numeric ID system starting from 100 (src/managers/id-manager.ts)
+- [x] **NEW**: Implement TempBills system with transaction data persistence
+- [x] **NEW**: Add `/pending` command to list active temporary bills
+- [x] **NEW**: Fix transaction data loss during account/type switching
+- [x] **NEW**: Comment out debt transaction types until Phase 5 implementation
 
 **Test Checklist**:
 ```
@@ -1024,34 +1064,51 @@ function handlePlaceholderButton(callback_data: string): string {
 ┌────────────────────────────────────────┐
 │ Test 1: Command Structure              │
 ├────────────────────────────────────────┤
-│ □ Send photo without /add → Bot ignores│
-│ □ Send /add → Bot prompts for input    │
-│ □ Send /add + photo → Shows keyboard   │
-│ □ Send /add + text → Shows keyboard    │
+│ ✅ Send photo without /add → Bot ignores│
+│ ✅ Send /add → Bot prompts for input    │
+│ ✅ Send /add + photo → Shows keyboard   │
+│ ✅ Send /add + text → Shows keyboard    │
 │                                        │
-│ Test 2: Expense Keyboard               │
+│ Test 2: Transaction Keyboards          │
 ├────────────────────────────────────────┤
-│ □ All fields displayed correctly       │
-│ □ Edit buttons present for all fields  │
-│ □ Category selection shows options     │
-│ □ Account selection shows options      │
-│ □ Submit button works                  │
+│ ✅ Expense keyboard displays correctly  │
+│ ✅ Income keyboard displays correctly   │
+│ ✅ Transfer keyboard displays correctly │
+│ ✅ Transaction type switching works     │
+│ ✅ Category selection shows options     │
+│ ✅ Account selection shows options      │
 │                                        │
-│ Test 3: Numeric ID System              │
+│ Test 3: TempBills System               │
 ├────────────────────────────────────────┤
-│ □ Transaction IDs start from 100       │
-│ □ IDs are sequential (100, 101, 102...)│
-│ □ Copy ID button shows correct ID      │
-│ □ Message shows "Transaction #100"     │
-│ □ IDs persist across bot restarts      │
+│ ✅ Transaction data persists on changes │
+│ ✅ Account switching preserves amount   │
+│ ✅ Type switching preserves all data    │
+│ ✅ Category switching preserves data    │
+│ ✅ /pending command lists active bills  │
+│ ✅ Transaction cancellation works       │
 │                                        │
-│ Test 4: Google Sheets Integration      │
+│ Test 4: Numeric ID System              │
 ├────────────────────────────────────────┤
-│ □ Categories sheet has default data    │
-│ □ Accounts sheet has default data      │
-│ □ Submitted bills save to Bills_2024   │
-│ □ All required fields populated        │
-│ □ Numeric IDs saved correctly in sheet │
+│ ✅ Transaction IDs start from 100       │
+│ ✅ IDs are sequential (100, 101, 102...)│
+│ ✅ Copy ID button shows correct ID      │
+│ ✅ Message shows "Transaction #100"     │
+│ ✅ IDs persist across bot restarts      │
+│                                        │
+│ Test 5: Google Sheets Integration      │
+├────────────────────────────────────────┤
+│ ✅ Categories sheet has default data    │
+│ ✅ Accounts sheet has default data      │
+│ ✅ TempBills sheet structure correct    │
+│ ✅ All required fields populated        │
+│ ✅ Numeric IDs saved correctly in sheet │
+│                                        │
+│ Test 6: Debt Types (Commented Out)     │
+├────────────────────────────────────────┤
+│ ✅ Debt transaction buttons hidden      │
+│ ✅ Only Expense/Income/Transfer visible │
+│ ✅ No "Type: Expense" for debt types    │
+│ ✅ Proper Phase 5 placeholder messages  │
 └────────────────────────────────────────┘
 ```
 
@@ -1177,12 +1234,16 @@ function handlePlaceholderButton(callback_data: string): string {
 **Implementation Tasks**:
 - [ ] Add Contacts, Debts, DebtHistory sheets to `/init`
 - [ ] Create debt-related TypeScript types (debt.types.ts)
-- [ ] Implement debt transaction keyboards
-- [ ] Create contact management system
+- [ ] **Uncomment debt transaction types** in callback-handler.ts and bill-keyboards.ts
+- [ ] Implement proper debt transaction keyboards (createLendKeyboard, createBorrowKeyboard, etc.)
+- [ ] Create contact management system with contact selection keyboards
 - [ ] Add debt tracking and balance updates
 - [ ] Implement payment history tracking
 - [ ] Create debt overview and summary keyboards
 - [ ] Add debt-specific AI detection patterns
+- [ ] **Update callback validation** to move debt types back to IMPLEMENTED_HANDLERS
+- [ ] **Create specialized keyboards** for each debt transaction type
+- [ ] **Add contact picker keyboards** for debt transactions
 
 **Test Checklist**:
 ```
@@ -1355,17 +1416,30 @@ function registerCallbackHandler(bot: any) {
 ```
 
 ### Available Commands
-- `/init` - Set up new Google Sheets workbook
-- `/add` - Add new transaction (followed by photo/text)
+
+**✅ Phase 2 - Currently Implemented:**
+- `/init` - Set up new Google Sheets workbook with TempBills support
+- `/add` - Add new transaction (followed by photo/text) 
 - `/add [description]` - Add transaction with text description
 - `/pending` - List unconfirmed transactions with clean numeric IDs
+- `/help` - Show available commands and current phase status
+
+**🚧 Phase 3-6 - Coming Soon:**
 - `Edit bill [id]` - Edit specific bill by numeric ID (e.g., "Edit bill 100")
 - `[id] [value]` - Direct field editing (e.g., "100 25.50" to update amount)
-- `/lend` - Record money lent to someone (NEW)
-- `/borrow` - Record money borrowed from someone (NEW)
-- `/pay` - Record debt payment (NEW)
-- `/debts` - Show debt overview (NEW)
-- `/contacts` - Manage lending contacts (NEW)
+
+**🚧 Phase 5 - Debt Management (Not Yet Implemented):**
+- `/lend` - Record money lent to someone (DISABLED)
+- `/borrow` - Record money borrowed from someone (DISABLED)
+- `/pay` - Record debt payment (DISABLED) 
+- `/debts` - Show debt overview (DISABLED)
+- `/contacts` - Manage lending contacts (DISABLED)
+
+**Transaction Types Currently Available:**
+- 💸 **Expense** - Full functionality with categories and accounts
+- 💰 **Income** - Full functionality with source accounts  
+- 🔄 **Transfer** - Full functionality with multi-account support
+- 🚧 **Debt Types** - Commented out until Phase 5 (Lend, Borrow, Debt Payment, Debt Received)
 
 ### Clean Transaction Commands Flow
 ```
