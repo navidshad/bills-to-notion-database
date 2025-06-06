@@ -186,75 +186,105 @@ The bot uses a dynamic inline keyboard system that adapts based on transaction t
 **Expense Transaction Keyboard:**
 ```
 Message Text: 
-💸 Expense Transaction #100
-💰 Amount: $25.50 | 📅 Date: Jan 15, 2024
-📂 Category: Food | 💳 Account: Main Card
+💰 Amount: $25.50
+📅 Date: Jan 15, 2024
+📂 Category: Food
+💳 Account: Main Card
+
+---
+MENU: 💸 Expense Transaction #100 👇
 
 Keyboard:
 ┌─────────────────────────────────────────┐
-│ 💰 Edit Amount   📅 Edit Date           │
+│ 🏷️ Type: Expense                       │
 ├─────────────────────────────────────────┤
-│ 📂 Change Category                      │
+│ 💰 Amount: $25.50   📅 Date: Jan 15     │
 ├─────────────────────────────────────────┤
-│ 💳 Change Account                       │
+│ 📂 Category: Food                       │
 ├─────────────────────────────────────────┤
-│ 🏷️ Change Type   🔄 Re-Calculate       │
+│ 💳 Account: Main Card                   │
 ├─────────────────────────────────────────┤
-│ 📋 Copy ID: #100   ✅ Submit            │
+│ 📋 Copy ID: #100  ❌ Cancel  ✅ Submit  │
 └─────────────────────────────────────────┘
 ```
 
 **Transfer Transaction Keyboard:**
 ```
 Message Text:
-🔄 Transfer Transaction #101  
-💰 Amount: $100.00 | 📅 Date: Jan 15, 2024
-📤 From: Main Card → 📥 To: Cash Account
-💱 Exchange Rate: 1.0 USD → USD
+💰 Amount: $100.00
+📅 Date: Jan 15, 2024
+📤 From: Main Card
+📥 To: Cash
+
+---
+MENU: 🔄 Transfer Transaction #101 👇
 
 Keyboard:
 ┌─────────────────────────────────────────┐
-│ 💰 Edit Amount   📅 Edit Date           │
+│ 🏷️ Type: Transfer                      │
 ├─────────────────────────────────────────┤
-│ 📤 Change From   📥 Change To           │
+│ 💰 Amount: $100.00   📅 Date: Jan 15    │
 ├─────────────────────────────────────────┤
-│ 💱 Edit Exchange Rate                   │
+│ 📤 From: Main Card   📥 To: Cash        │
 ├─────────────────────────────────────────┤
-│ 🏷️ Change Type   🔄 Re-Calculate       │
+│ 💱 Rate: 1.0                            │
 ├─────────────────────────────────────────┤
-│ 📋 Copy ID: #101   ✅ Submit            │
+│ 📋 Copy ID: #101  ❌ Cancel  ✅ Submit  │
 └─────────────────────────────────────────┘
 ```
 
 **Debt Management Keyboards:**
 ```
 Message Text:
-🤝 Lend Money Transaction #102
-💰 Amount: $200.00 | 📅 Date: Jan 15, 2024  
-👤 Contact: John Smith | 💳 From: Main Card
+💰 Amount: $200.00
+📅 Date: Jan 15, 2024
+👤 Contact: John Smith
+💳 Account: Main Card
 📝 Purpose: Car Repair
+
+---
+MENU: 🤝 Lend Money Transaction #102 👇
 
 Keyboard:
 ┌─────────────────────────────────────────┐
-│ 💰 Edit Amount   📅 Edit Date           │
+│ 🏷️ Type: Lend Money                    │
 ├─────────────────────────────────────────┤
-│ 👤 Change Contact                       │
+│ 💰 Amount: $200.00   📅 Date: Jan 15    │
 ├─────────────────────────────────────────┤
-│ 💳 Change Account                       │
+│ 👤 Contact: John Smith                  │
 ├─────────────────────────────────────────┤
-│ 📝 Edit Purpose   🔄 Re-Calculate       │
+│ 💳 Account: Main Card                   │
 ├─────────────────────────────────────────┤
-│ 📋 Copy ID: #102   ✅ Submit            │
+│ 📝 Purpose: Car Repair                  │
+├─────────────────────────────────────────┤
+│ 📋 Copy ID: #102  ❌ Cancel  ✅ Submit  │
 └─────────────────────────────────────────┘
 ```
 
 #### 2.3 Field Edit Keyboards
 
+**Cancellation Confirmation:**
+```
+Message Text:
+⚠️ Cancel Transaction #100?
+      
+This will permanently delete this transaction. This action cannot be undone.
+
+---
+MENU: Cancellation Confirmation 👇
+
+Keyboard:
+┌─────────────────────────────────────────┐
+│ ✅ Yes, Cancel Transaction              │
+├─────────────────────────────────────────┤
+│ ← No, Go Back                           │
+└─────────────────────────────────────────┘
+```
+
 **Transaction Type Selection:**
 ```
 Message Text:
 🔄 Change Transaction Type for #100
-Current: Expense → Select new type:
 
 Keyboard:
 ┌─────────────────────────────────────────┐
@@ -274,7 +304,6 @@ Keyboard:
 ```
 Message Text:
 📂 Select Category for Transaction #100
-Current: Food → Choose new category:
 
 Keyboard:
 ┌─────────────────────────────────────────┐
@@ -314,14 +343,15 @@ Keyboard:
 
 #### 2.4 Enhanced Keyboard Design Principles
 
-- **Message-Based Titles**: Menu titles and transaction details are displayed in the message text, not as keyboard buttons
-- **Clean Button Layout**: Keyboard contains only actionable buttons, no title/header buttons
-- **Context-Aware Content**: Message text shows all relevant transaction details with emojis and clear formatting
+- **Values in Button Labels**: Transaction values are displayed directly in button labels for immediate visibility
+- **Clean Message Titles**: Only menu titles are shown in message text, no detailed information
+- **Interactive Buttons**: Each button shows current value and allows editing (e.g., "💰 Amount: $25.50")
 - **Functional Buttons Only**: Every button performs an action - no decorative or informational buttons
 - **Placeholder Messages**: Non-implemented buttons show helpful "Coming soon" or "Not implemented yet" messages
 - **Consistent Navigation**: "← Back to Transaction" pattern for all sub-menus
 - **Copy ID Integration**: "📋 Copy ID: #XXX" button included in main transaction keyboards
 - **Logical Grouping**: Related actions grouped together (amount/date, accounts, etc.)
+- **Real-time Updates**: Button labels update immediately when values change
 
 #### 2.5 Placeholder Message System
 
@@ -968,7 +998,7 @@ function handlePlaceholderButton(callback_data: string): string {
 
 **Status**: ✅ **COMPLETE**
 
-### Phase 2: Command Structure & Primary Keyboards
+### Phase 2: Command Structure & Primary Keyboards ✅ COMPLETED
 **Deliverable**: `/add` command with enhanced transaction keyboards
 
 **Keyboard Focus**: Full primary keyboards for each transaction type
@@ -980,12 +1010,13 @@ function handlePlaceholderButton(callback_data: string): string {
 ```
 
 **Implementation Tasks**:
-- [ ] Implement `/add` command handler (src/events/commands/add-command.ts)
-- [ ] Create primary keyboard layouts (src/keyboards/bill-keyboards.ts)
-- [ ] Update message processing to require `/add` command
-- [ ] Implement Categories and Accounts sheets in `/init`
-- [ ] Add keyboard callback handling (src/events/callback-handler.ts)
-- [ ] Update AI chains with enhanced bill schema
+- [x] Implement `/add` command handler (src/events/commands/add-command.ts)
+- [x] Create primary keyboard layouts (src/keyboards/bill-keyboards.ts)
+- [x] Update message processing to require `/add` command
+- [x] Implement Categories and Accounts sheets in `/init`
+- [x] Add keyboard callback handling (src/events/callback-handler.ts)
+- [x] Update AI chains with enhanced bill schema
+- [x] **NEW**: Implement numeric ID system starting from 100 (src/managers/id-manager.ts)
 
 **Test Checklist**:
 ```
@@ -1006,12 +1037,21 @@ function handlePlaceholderButton(callback_data: string): string {
 │ □ Account selection shows options      │
 │ □ Submit button works                  │
 │                                        │
-│ Test 3: Google Sheets Integration      │
+│ Test 3: Numeric ID System              │
+├────────────────────────────────────────┤
+│ □ Transaction IDs start from 100       │
+│ □ IDs are sequential (100, 101, 102...)│
+│ □ Copy ID button shows correct ID      │
+│ □ Message shows "Transaction #100"     │
+│ □ IDs persist across bot restarts      │
+│                                        │
+│ Test 4: Google Sheets Integration      │
 ├────────────────────────────────────────┤
 │ □ Categories sheet has default data    │
 │ □ Accounts sheet has default data      │
 │ □ Submitted bills save to Bills_2024   │
 │ □ All required fields populated        │
+│ □ Numeric IDs saved correctly in sheet │
 └────────────────────────────────────────┘
 ```
 
@@ -1278,29 +1318,37 @@ function registerCallbackHandler(bot: any) {
     const { data: callback_data, message } = query;
     const chatId = message.chat.id;
     
-    // Handle placeholder buttons (non-implemented features)
+    // Handle placeholder buttons (non-implemented features) ✅ IMPLEMENTED
     const placeholderFeatures = [
-      'edit_details', 'exchange_rate', 'recurring', 
-      'analytics', 'export', 'notifications'
+      // Phase 3 features
+      "edit_amount", "edit_date", "edit_details", "new_category", "new_account", "submit",
+      // Phase 4 features  
+      "edit_from", "edit_to", "edit_exchange", "edit_source",
+      // Phase 5 features
+      "edit_contact", "edit_purpose", "debt_payment", 
+      // Phase 6 features
+      "analytics", "export", "recurring", "notifications"
     ];
     
     if (placeholderFeatures.some(feature => callback_data.includes(feature))) {
       const placeholderMessage = handlePlaceholderButton(callback_data);
       
-      // Send temporary notification message
-      const notificationMsg = await bot.sendMessage(chatId, placeholderMessage);
+      // Send temporary notification message with phase information
+      const notificationMsg = await bot.sendMessage(chatId, placeholderMessage, {
+        parse_mode: "Markdown"
+      });
       
-      // Auto-delete notification after 5 seconds
+      // Auto-delete notification after 8 seconds (longer for detailed messages)
       setTimeout(() => {
         bot.deleteMessage(chatId, notificationMsg.message_id).catch(() => {});
-      }, 5000);
+      }, 8000);
       
       // Answer callback query to remove loading state
       bot.answerCallbackQuery(query.id);
       return;
     }
     
-    // Handle implemented features
+    // Handle implemented features (Phase 2 complete)
     // ... existing callback handling logic
   });
 }
@@ -1325,33 +1373,47 @@ User: /add
 Bot: 📸 Send me a photo of your receipt or describe your expense
 
 User: [Sends receipt photo]
-Bot: 💸 Expense Transaction #100
-     💰 Amount: $25.50 | 📅 Date: Jan 15, 2024
-     📂 Category: Food | 💳 Account: Main Card
+Bot: 💰 Amount: $25.50
+     📅 Date: Jan 15, 2024
+     📂 Category: Food
+     💳 Account: Main Card
      
+     ---
+     MENU: 💸 Expense Transaction #100 👇
      [Clean keyboard with action buttons only]
 
 User: /add Spent $15 on coffee
-Bot: 💸 Expense Transaction #101
-     💰 Amount: $15.00 | 📅 Date: Jan 15, 2024
-     📂 Category: Food | 💳 Account: Main Card
+Bot: 💰 Amount: $15.00
+     📅 Date: Jan 15, 2024
+     📂 Category: Food
+     💳 Account: Main Card
+     
+     ---
+     MENU: 💸 Expense Transaction #101 👇
 
 User: [Clicks "💰 Edit Amount" on transaction #100]
 Bot: 💰 Send the new amount for transaction #100    ← AUTO-DELETED
      Format: 100 [amount]                          ← AUTO-DELETED
 
 User: 100 150.75                                   ← AUTO-DELETED
-Bot: 💸 Expense Transaction #100                   ← Updated message
-     💰 Amount: $150.75 | 📅 Date: Jan 15, 2024
-     📂 Category: Food | 💳 Account: Main Card
+Bot: 💰 Amount: $150.75                           ← Updated message
+     📅 Date: Jan 15, 2024
+     📂 Category: Food
+     💳 Account: Main Card
      
+     ---
+     MENU: 💸 Expense Transaction #100 👇
      [Clean keyboard - all guide messages gone]
 
 Final Chat History:
 User: [Photo of receipt]
-Bot: 💸 Expense Transaction #100                   ← Clean result only
-     💰 Amount: $150.75 | 📅 Date: Jan 15, 2024
-     📂 Category: Food | 💳 Account: Main Card
+Bot: 💰 Amount: $150.75                           ← Clean result only
+     📅 Date: Jan 15, 2024
+     📂 Category: Food
+     💳 Account: Main Card
+     
+     ---
+     MENU: 💸 Expense Transaction #100 👇
      [Action buttons keyboard]
 ```
 

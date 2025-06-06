@@ -8,6 +8,7 @@ import TelegramBot from "node-telegram-bot-api";
 // Import event handlers
 import { registerInitCommand } from "./events/commands/init-command";
 import { registerHelpCommand } from "./events/commands/help-command";
+import { registerAddCommand } from "./events/commands/add-command";
 import { registerMessageHandler } from "./events/message-handler";
 import { registerCallbackHandler } from "./events/callback-handler";
 
@@ -20,6 +21,7 @@ const bot = new TelegramBot(token, { polling: true });
 // Register all event handlers
 registerInitCommand(bot);
 registerHelpCommand(bot);
+registerAddCommand(bot);
 registerMessageHandler(bot);
 registerCallbackHandler(bot);
 
@@ -27,4 +29,5 @@ console.log("🤖 Personal Finance Bot started successfully!");
 console.log("Available commands:");
 console.log("  /init - Initialize Google Sheets workbook");
 console.log("  /help - Show help information");
-console.log("Send photos or text to process bills and expenses.");
+console.log("  /add - Add new transaction (followed by photo/text)");
+console.log("Use /add command to process bills and expenses.");

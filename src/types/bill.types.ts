@@ -19,6 +19,19 @@ export const billRecordSchema = z.object({
   }),
   date: z.date({ description: "if not provided, use message date" }),
   description: z.string(),
+  category: z.string().optional(),
+  account: z.string().optional(),
+  transaction_type: z
+    .enum([
+      "expense",
+      "income",
+      "transfer",
+      "lend",
+      "borrow",
+      "debt_payment",
+      "debt_received",
+    ])
+    .optional(),
 });
 
 export const userIntentSchema = z.object({
@@ -36,6 +49,16 @@ export interface BillRecord {
   currency_code: string;
   date: Date | string;
   description: string;
+  category?: string;
+  account?: string;
+  transaction_type?:
+    | "expense"
+    | "income"
+    | "transfer"
+    | "lend"
+    | "borrow"
+    | "debt_payment"
+    | "debt_received";
 }
 
 export interface BillRecordInput {

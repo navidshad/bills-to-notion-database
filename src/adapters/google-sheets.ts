@@ -84,7 +84,9 @@ class GoogleSheetsAdapter {
                     ? 15
                     : sheetName.startsWith("Bills_")
                     ? 20
-                    : 5,
+                    : sheetName === "Categories" || sheetName === "Accounts"
+                    ? 5 // ID, Name, Emoji, Type, Description
+                    : 3, // Config sheet: Setting, Value, Description
               },
             },
           },
@@ -168,22 +170,57 @@ class GoogleSheetsAdapter {
 
   async setupCategoriesData(spreadsheetId: string) {
     const categories = [
-      ["Category", "Type", "Description"],
-      ["Food & Dining", "Expense", "Restaurants, groceries, coffee"],
-      ["Transportation", "Expense", "Gas, public transport, parking"],
-      ["Shopping", "Expense", "Clothing, electronics, general shopping"],
-      ["Bills & Utilities", "Expense", "Electricity, water, internet, phone"],
-      ["Healthcare", "Expense", "Medical expenses, pharmacy, insurance"],
-      ["Entertainment", "Expense", "Movies, games, subscriptions"],
-      ["Travel", "Expense", "Hotels, flights, vacation expenses"],
-      ["Education", "Expense", "Books, courses, training"],
-      ["Income", "Income", "Salary, freelance, bonuses"],
-      ["Other", "Expense", "Miscellaneous expenses"],
+      ["ID", "Name", "Emoji", "Type", "Description"],
+      ["food", "Food", "🍕", "Expense", "Restaurants, groceries, coffee"],
+      [
+        "transport",
+        "Transport",
+        "🚗",
+        "Expense",
+        "Gas, public transport, parking",
+      ],
+      [
+        "shopping",
+        "Shopping",
+        "👕",
+        "Expense",
+        "Clothing, electronics, general shopping",
+      ],
+      [
+        "utilities",
+        "Utilities",
+        "💡",
+        "Expense",
+        "Electricity, water, internet, phone",
+      ],
+      [
+        "healthcare",
+        "Healthcare",
+        "🏥",
+        "Expense",
+        "Medical expenses, pharmacy, insurance",
+      ],
+      [
+        "entertainment",
+        "Entertainment",
+        "🎬",
+        "Expense",
+        "Movies, games, subscriptions",
+      ],
+      [
+        "housing",
+        "Housing",
+        "🏠",
+        "Expense",
+        "Rent, mortgage, home maintenance",
+      ],
+      ["education", "Education", "📚", "Expense", "Books, courses, training"],
+      ["other", "Other", "📋", "Expense", "Miscellaneous expenses"],
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Categories!A1:C11",
+      range: "Categories!A1:E10",
       valueInputOption: "RAW",
       requestBody: {
         values: categories,
@@ -193,17 +230,18 @@ class GoogleSheetsAdapter {
 
   async setupAccountsData(spreadsheetId: string) {
     const accounts = [
-      ["Account", "Type", "Description"],
-      ["Main Card", "Credit Card", "Primary credit card"],
-      ["Debit Card", "Debit Card", "Bank debit card"],
-      ["Cash", "Cash", "Physical cash"],
-      ["Savings", "Bank Account", "Savings account"],
-      ["Checking", "Bank Account", "Checking account"],
+      ["ID", "Name", "Emoji", "Type", "Description"],
+      ["main_card", "Main Card", "💳", "Credit Card", "Primary credit card"],
+      ["checking", "Checking", "🏦", "Bank Account", "Bank checking account"],
+      ["cash", "Cash", "💰", "Cash", "Physical cash"],
+      ["credit", "Credit Card", "💳", "Credit Card", "Secondary credit card"],
+      ["savings", "Savings", "💰", "Bank Account", "Savings account"],
+      ["digital", "Digital Wallet", "📱", "Digital", "PayPal, Apple Pay, etc."],
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Accounts!A1:C6",
+      range: "Accounts!A1:E7",
       valueInputOption: "RAW",
       requestBody: {
         values: accounts,
@@ -264,7 +302,8 @@ class GoogleSheetsAdapter {
     totalPrice: number,
     currency_code: string,
     date: string,
-    description: string
+    description: string,
+    id?: number
   ) {
     if (!this.sheets) await this.initialize();
     if (!this.spreadsheetId) {
@@ -284,11 +323,11 @@ class GoogleSheetsAdapter {
       const normalizedDate = this.normalizeDate(date);
       const timestamp = new Date().toISOString();
 
-      // Generate a simple ID (you might want to use UUID in production)
-      const id = `bill_${Date.now()}`;
+      // Use provided ID or generate a fallback timestamp-based ID
+      const itemId = id || Date.now();
 
       const values = [
-        id, // ID
+        itemId, // ID
         normalizedDate, // Date
         title, // Title/Description
         totalPrice, // Amount
@@ -317,10 +356,117 @@ class GoogleSheetsAdapter {
       });
 
       console.log("Success! Entry added to Google Sheets.");
-      return { success: true, id };
+      return { success: true, id: itemId };
     } catch (error) {
       console.error("Error adding item to Google Sheets:", error);
       throw error;
+    }
+  }
+
+  async getRange(range: string) {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: range,
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.status === 400) {
+        // Sheet or range doesn't exist
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async getCategories() {
+    try {
+      const response = await this.getRange("Categories!A2:E");
+      if (!response || !response.values) {
+        throw new Error("No categories data found");
+      }
+
+      return response.values.map((row: any[]) => ({
+        id: row[0] || "",
+        name: row[1] || "",
+        emoji: row[2] || "📋",
+        type: row[3] || "Expense",
+        description: row[4] || "",
+      }));
+    } catch (error) {
+      console.error("Error reading categories:", error);
+      // Return default categories if sheet read fails
+      return [
+        {
+          id: "food",
+          name: "Food",
+          emoji: "🍕",
+          type: "Expense",
+          description: "Food and dining",
+        },
+        {
+          id: "transport",
+          name: "Transport",
+          emoji: "🚗",
+          type: "Expense",
+          description: "Transportation",
+        },
+        {
+          id: "other",
+          name: "Other",
+          emoji: "📋",
+          type: "Expense",
+          description: "Other expenses",
+        },
+      ];
+    }
+  }
+
+  async getAccounts() {
+    try {
+      const response = await this.getRange("Accounts!A2:E");
+      if (!response || !response.values) {
+        throw new Error("No accounts data found");
+      }
+
+      return response.values.map((row: any[]) => ({
+        id: row[0] || "",
+        name: row[1] || "",
+        emoji: row[2] || "💳",
+        type: row[3] || "Account",
+        description: row[4] || "",
+      }));
+    } catch (error) {
+      console.error("Error reading accounts:", error);
+      // Return default accounts if sheet read fails
+      return [
+        {
+          id: "main_card",
+          name: "Main Card",
+          emoji: "💳",
+          type: "Credit Card",
+          description: "Primary card",
+        },
+        {
+          id: "cash",
+          name: "Cash",
+          emoji: "💰",
+          type: "Cash",
+          description: "Physical cash",
+        },
+        {
+          id: "checking",
+          name: "Checking",
+          emoji: "🏦",
+          type: "Bank Account",
+          description: "Checking account",
+        },
+      ];
     }
   }
 
