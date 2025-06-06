@@ -153,16 +153,19 @@ class GoogleSheetsAdapter {
 
   async setupTempBillsHeaders(spreadsheetId: string) {
     const headers = [
-      "MessageID",
-      "ProcessedData",
-      "Timestamp",
-      "ChatID",
-      "Status",
+      "bill_id", // Sequential numeric ID starting from 100 (primary key)
+      "user_id", // Telegram user ID
+      "transaction_data", // JSON string of BillRecord data
+      "guide_message_ids", // JSON array of guide message IDs for cleanup [123, 124, 125]
+      "user_input_message_id", // User's input message ID for cleanup
+      "original_message_id", // The main transaction message to preserve
+      "created_at", // Creation timestamp
+      "updated_at", // Last update timestamp
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "TempBills!A1:E1",
+      range: "TempBills!A1:H1",
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -704,6 +707,286 @@ class GoogleSheetsAdapter {
         errors: ["Failed to validate against Google Sheets"],
         correctedData: billDetail,
       };
+    }
+  }
+
+  /**
+   * TempBills Management Methods
+   */
+
+  /**
+   * Save a temporary bill to TempBills sheet
+   */
+  async saveTempBill(
+    billId: number,
+    userId: string,
+    transactionData: any,
+    originalMessageId: number,
+    guideMessageIds: number[] = []
+  ) {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const timestamp = new Date().toISOString();
+      const values = [
+        billId, // bill_id
+        userId, // user_id
+        JSON.stringify(transactionData), // transaction_data
+        JSON.stringify(guideMessageIds), // guide_message_ids
+        "", // user_input_message_id (empty initially)
+        originalMessageId, // original_message_id
+        timestamp, // created_at
+        timestamp, // updated_at
+      ];
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: "TempBills!A:H",
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [values],
+        },
+      });
+
+      console.log(`TempBill saved: ID ${billId}`);
+      return { success: true, billId };
+    } catch (error) {
+      console.error("Error saving temp bill:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a temporary bill by ID
+   */
+  async getTempBill(billId: number): Promise<any | null> {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: "TempBills!A:H",
+      });
+
+      if (!response.data.values) return null;
+
+      // Find the row with matching bill_id (skip header row)
+      for (let i = 1; i < response.data.values.length; i++) {
+        const row = response.data.values[i];
+        if (parseInt(row[0]) === billId) {
+          return {
+            billId: parseInt(row[0]),
+            userId: row[1],
+            transactionData: JSON.parse(row[2] || "{}"),
+            guideMessageIds: JSON.parse(row[3] || "[]"),
+            userInputMessageId: row[4] ? parseInt(row[4]) : null,
+            originalMessageId: parseInt(row[5]),
+            createdAt: row[6],
+            updatedAt: row[7],
+            rowIndex: i + 1, // 1-based row index for updates
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error getting temp bill:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a temporary bill
+   */
+  async updateTempBill(
+    billId: number,
+    updates: {
+      transactionData?: any;
+      guideMessageIds?: number[];
+      userInputMessageId?: number;
+    }
+  ) {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      // First, get the current temp bill to find its row
+      const tempBill = await this.getTempBill(billId);
+      if (!tempBill) {
+        throw new Error(`TempBill with ID ${billId} not found`);
+      }
+
+      const timestamp = new Date().toISOString();
+
+      // Prepare updated values
+      const updatedTransactionData = updates.transactionData
+        ? JSON.stringify(updates.transactionData)
+        : JSON.stringify(tempBill.transactionData);
+
+      const updatedGuideMessageIds =
+        updates.guideMessageIds !== undefined
+          ? JSON.stringify(updates.guideMessageIds)
+          : JSON.stringify(tempBill.guideMessageIds);
+
+      const updatedUserInputMessageId =
+        updates.userInputMessageId !== undefined
+          ? updates.userInputMessageId.toString()
+          : tempBill.userInputMessageId
+          ? tempBill.userInputMessageId.toString()
+          : "";
+
+      const values = [
+        tempBill.billId, // bill_id (unchanged)
+        tempBill.userId, // user_id (unchanged)
+        updatedTransactionData, // transaction_data (updated)
+        updatedGuideMessageIds, // guide_message_ids (updated)
+        updatedUserInputMessageId, // user_input_message_id (updated)
+        tempBill.originalMessageId, // original_message_id (unchanged)
+        tempBill.createdAt, // created_at (unchanged)
+        timestamp, // updated_at (updated)
+      ];
+
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `TempBills!A${tempBill.rowIndex}:H${tempBill.rowIndex}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [values],
+        },
+      });
+
+      console.log(`TempBill updated: ID ${billId}`);
+      return { success: true, billId };
+    } catch (error) {
+      console.error("Error updating temp bill:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a temporary bill
+   */
+  async deleteTempBill(billId: number) {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      // First, get the temp bill to find its row
+      const tempBill = await this.getTempBill(billId);
+      if (!tempBill) {
+        console.warn(`TempBill with ID ${billId} not found for deletion`);
+        return { success: true, billId }; // Consider it successful if already gone
+      }
+
+      // Delete the row (0-based index for delete request)
+      const deleteRowIndex = tempBill.rowIndex - 1;
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              deleteDimension: {
+                range: {
+                  sheetId: await this.getSheetId("TempBills"),
+                  dimension: "ROWS",
+                  startIndex: deleteRowIndex,
+                  endIndex: deleteRowIndex + 1,
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      console.log(`TempBill deleted: ID ${billId}`);
+      return { success: true, billId };
+    } catch (error) {
+      console.error("Error deleting temp bill:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get sheet ID by name (helper method for deleteTempBill)
+   */
+  private async getSheetId(sheetName: string): Promise<number> {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+
+      const sheet = response.data.sheets.find(
+        (s: any) => s.properties.title === sheetName
+      );
+
+      if (!sheet) {
+        throw new Error(`Sheet "${sheetName}" not found`);
+      }
+
+      return sheet.properties.sheetId;
+    } catch (error) {
+      console.error(`Error getting sheet ID for "${sheetName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all temporary bills for a user
+   */
+  async getUserTempBills(userId: string): Promise<any[]> {
+    if (!this.sheets) await this.initialize();
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: "TempBills!A:H",
+      });
+
+      if (!response.data.values) return [];
+
+      const tempBills = [];
+
+      // Find all rows with matching user_id (skip header row)
+      for (let i = 1; i < response.data.values.length; i++) {
+        const row = response.data.values[i];
+        if (row[1] === userId) {
+          tempBills.push({
+            billId: parseInt(row[0]),
+            userId: row[1],
+            transactionData: JSON.parse(row[2] || "{}"),
+            guideMessageIds: JSON.parse(row[3] || "[]"),
+            userInputMessageId: row[4] ? parseInt(row[4]) : null,
+            originalMessageId: parseInt(row[5]),
+            createdAt: row[6],
+            updatedAt: row[7],
+            rowIndex: i + 1,
+          });
+        }
+      }
+
+      return tempBills;
+    } catch (error) {
+      console.error("Error getting user temp bills:", error);
+      throw error;
     }
   }
 }

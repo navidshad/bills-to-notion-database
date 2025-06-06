@@ -79,6 +79,15 @@ function registerAddCommand(bot: any) {
       // Generate sequential numeric transaction ID starting from 100
       const transactionId = await IDManager.generateTransactionID();
 
+      // Save transaction data to TempBills sheet for persistence
+      await GoogleSheetsAdapter.saveTempBill(
+        transactionId,
+        msg.from.id.toString(), // Telegram user ID
+        validatedBillDetail,
+        previewMessage.message_id,
+        [] // No guide messages yet
+      );
+
       // Create transaction message with expense keyboard
       const transactionMessage = formatTransactionMessage(
         "expense",
@@ -191,6 +200,15 @@ function registerAddCommand(bot: any) {
 
         // Generate sequential numeric transaction ID starting from 100
         const transactionId = await IDManager.generateTransactionID();
+
+        // Save transaction data to TempBills sheet for persistence
+        await GoogleSheetsAdapter.saveTempBill(
+          transactionId,
+          msg.from.id.toString(), // Telegram user ID
+          validatedBillDetail,
+          previewMessage.message_id,
+          [] // No guide messages yet
+        );
 
         // Create transaction message with expense keyboard
         const transactionMessage = formatTransactionMessage(

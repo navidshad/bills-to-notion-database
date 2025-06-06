@@ -260,14 +260,39 @@ function registerCallbackHandler(bot: any) {
 
       const categoryName = await getCategoryName(categoryId);
 
-      // TODO: Update transaction data with new category
-      // For now, show success message and return to main keyboard
+      // Retrieve existing transaction data from TempBills and update category
+      let transactionData = {};
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill && tempBill.transactionData) {
+          // Preserve all existing data and only update category
+          transactionData = {
+            ...tempBill.transactionData,
+            category: categoryName,
+          };
+
+          // Update TempBills with the new category information
+          await googleSheetsAdapter.updateTempBill(transactionId, {
+            transactionData: transactionData,
+          });
+        } else {
+          // Fallback if TempBill not found (shouldn't happen)
+          console.warn(
+            `TempBill not found for transaction ${transactionId}, using minimal data`
+          );
+          transactionData = { category: categoryName };
+        }
+      } catch (error) {
+        console.error("Error retrieving transaction data:", error);
+        // Fallback to minimal data
+        transactionData = { category: categoryName };
+      }
+
       bot.answerCallbackQuery(query.id, {
         text: `Category changed to ${categoryName}`,
       });
 
       // Return to main transaction keyboard with updated category
-      const transactionData = { category: categoryName };
       const keyboard = createExpenseKeyboard(transactionId, transactionData);
       const messageText = formatTransactionMessage(
         "expense",
@@ -342,11 +367,40 @@ function registerCallbackHandler(bot: any) {
         console.warn("Error getting account currency:", error);
       }
 
-      // Re-validate currency based on selected account to clear warnings if supported
-      const transactionData = {
-        account: accountName,
-        currency_code: accountCurrency,
-      };
+      // Retrieve existing transaction data from TempBills to preserve all fields
+      let transactionData = {};
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill && tempBill.transactionData) {
+          // Preserve all existing data and only update account/currency
+          transactionData = {
+            ...tempBill.transactionData,
+            account: accountName,
+            currency_code: accountCurrency,
+          };
+
+          // Update TempBills with the new account information
+          await googleSheetsAdapter.updateTempBill(transactionId, {
+            transactionData: transactionData,
+          });
+        } else {
+          // Fallback if TempBill not found (shouldn't happen)
+          console.warn(
+            `TempBill not found for transaction ${transactionId}, using minimal data`
+          );
+          transactionData = {
+            account: accountName,
+            currency_code: accountCurrency,
+          };
+        }
+      } catch (error) {
+        console.error("Error retrieving transaction data:", error);
+        // Fallback to minimal data
+        transactionData = {
+          account: accountName,
+          currency_code: accountCurrency,
+        };
+      }
 
       const keyboard = createExpenseKeyboard(transactionId, transactionData);
       const messageText = formatTransactionMessage(
@@ -510,8 +564,13 @@ MENU: Cancellation Confirmation 👇`;
       ) &&
       transactionId
     ) {
-      // TODO: In Phase 3, remove from TempBills sheet
-      // For now, just delete the message
+      // Delete from TempBills sheet
+      try {
+        await googleSheetsAdapter.deleteTempBill(transactionId);
+        console.log(`Transaction #${transactionId} deleted from TempBills`);
+      } catch (error) {
+        console.error("Error deleting from TempBills:", error);
+      }
 
       bot.deleteMessage(chatId, message.message_id).catch(() => {
         // If deletion fails, edit the message instead
@@ -538,8 +597,19 @@ MENU: Cancellation Confirmation 👇`;
       ) &&
       transactionId
     ) {
-      // Return to main transaction keyboard
-      const transactionData = {};
+      // Retrieve existing transaction data from TempBills
+      let transactionData = {};
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill && tempBill.transactionData) {
+          transactionData = tempBill.transactionData;
+        } else {
+          console.warn(`TempBill not found for transaction ${transactionId}`);
+        }
+      } catch (error) {
+        console.error("Error retrieving transaction data:", error);
+      }
+
       const keyboard = createExpenseKeyboard(transactionId, transactionData);
       const messageText = formatTransactionMessage(
         "expense",
