@@ -38,7 +38,7 @@ function formatTransactionMessage(
   // Handle different transaction types with specific formatting
   if (type === "transfer") {
     const fromAccount =
-      transactionData?.account || transactionData?.from_account || "Main Card";
+      transactionData?.account || transactionData?.from_account || "none";
     const toAccount =
       transactionData?.destination_account ||
       transactionData?.to_account ||
@@ -72,8 +72,8 @@ function formatTransactionMessage(
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
   } else {
     // For expense and income transactions
-    const category = transactionData?.category || "Other";
-    const account = transactionData?.account || "Main Card";
+    const category = transactionData?.category || "none";
+    const account = transactionData?.account || "none";
 
     return `💰 Amount: ${currencySymbol}${amount}
 📅 Date: ${date}
@@ -289,13 +289,22 @@ function registerMessageHandler(bot: any) {
 
         switch (transactionType) {
           case "income":
-            keyboard = createIncomeKeyboard(transactionId, transactionData);
+            keyboard = await createIncomeKeyboard(
+              transactionId,
+              transactionData
+            );
             break;
           case "transfer":
-            keyboard = createTransferKeyboard(transactionId, transactionData);
+            keyboard = await createTransferKeyboard(
+              transactionId,
+              transactionData
+            );
             break;
           default:
-            keyboard = createExpenseKeyboard(transactionId, transactionData);
+            keyboard = await createExpenseKeyboard(
+              transactionId,
+              transactionData
+            );
         }
 
         const messageText = formatTransactionMessage(

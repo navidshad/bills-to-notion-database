@@ -57,7 +57,7 @@ function formatTransactionMessage(
   // Handle different transaction types with specific formatting
   if (type === "transfer") {
     const fromAccount =
-      transactionData?.account || transactionData?.from_account || "Main Card";
+      transactionData?.account || transactionData?.from_account || "none";
     const toAccount =
       transactionData?.destination_account ||
       transactionData?.to_account ||
@@ -103,8 +103,8 @@ MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
   } else {
     // For expense transactions
-    const category = transactionData?.category || "Other";
-    const account = transactionData?.account || "Main Card";
+    const category = transactionData?.category || "none";
+    const account = transactionData?.account || "none";
 
     return `💰 Amount: ${currencySymbol}${amount}
 📅 Date: ${date}
@@ -339,7 +339,10 @@ function registerCallbackHandler(bot: any) {
       });
 
       // Return to main transaction keyboard with updated category
-      const keyboard = createExpenseKeyboard(transactionId, transactionData);
+      const keyboard = await createExpenseKeyboard(
+        transactionId,
+        transactionData
+      );
       const messageText = formatTransactionMessage(
         "expense",
         transactionId,
@@ -489,13 +492,19 @@ function registerCallbackHandler(bot: any) {
       let keyboard;
       switch (transactionType) {
         case "income":
-          keyboard = createIncomeKeyboard(transactionId, transactionData);
+          keyboard = await createIncomeKeyboard(transactionId, transactionData);
           break;
         case "transfer":
-          keyboard = createTransferKeyboard(transactionId, transactionData);
+          keyboard = await createTransferKeyboard(
+            transactionId,
+            transactionData
+          );
           break;
         default: // expense and other types
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = await createExpenseKeyboard(
+            transactionId,
+            transactionData
+          );
       }
 
       const messageText = formatTransactionMessage(
@@ -558,7 +567,10 @@ function registerCallbackHandler(bot: any) {
       });
 
       // Return to main transaction keyboard with updated source
-      const keyboard = createIncomeKeyboard(transactionId, transactionData);
+      const keyboard = await createIncomeKeyboard(
+        transactionId,
+        transactionData
+      );
       const messageText = formatTransactionMessage(
         "income",
         transactionId,
@@ -662,12 +674,15 @@ function registerCallbackHandler(bot: any) {
 
       switch (selectedType) {
         case "income":
-          keyboard = createIncomeKeyboard(transactionId, transactionData);
+          keyboard = await createIncomeKeyboard(transactionId, transactionData);
           typeEmoji = "💰";
           typeName = "Income";
           break;
         case "transfer":
-          keyboard = createTransferKeyboard(transactionId, transactionData);
+          keyboard = await createTransferKeyboard(
+            transactionId,
+            transactionData
+          );
           typeEmoji = "🔄";
           typeName = "Transfer";
           break;
@@ -697,7 +712,10 @@ function registerCallbackHandler(bot: any) {
           break;
         */
         default: // expense
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = await createExpenseKeyboard(
+            transactionId,
+            transactionData
+          );
           typeEmoji = "💸";
           typeName = "Expense";
       }
@@ -769,8 +787,9 @@ function registerCallbackHandler(bot: any) {
 
           if (finalBillData) {
             // Update message to show submitted bill format
-            const submittedBillMessage =
-              formatSubmittedBillMessage(finalBillData);
+            const submittedBillMessage = await formatSubmittedBillMessage(
+              finalBillData
+            );
             const submittedBillKeyboard =
               createSubmittedBillKeyboard(transactionId);
 
@@ -856,16 +875,19 @@ function registerCallbackHandler(bot: any) {
             let keyboard;
             switch (transactionType) {
               case "income":
-                keyboard = createIncomeKeyboard(transactionId, transactionData);
+                keyboard = await createIncomeKeyboard(
+                  transactionId,
+                  transactionData
+                );
                 break;
               case "transfer":
-                keyboard = createTransferKeyboard(
+                keyboard = await createTransferKeyboard(
                   transactionId,
                   transactionData
                 );
                 break;
               default: // expense and other types
-                keyboard = createExpenseKeyboard(
+                keyboard = await createExpenseKeyboard(
                   transactionId,
                   transactionData
                 );
@@ -971,8 +993,9 @@ MENU: Cancellation Confirmation 👇`;
               await googleSheetsAdapter.getBillFromYearlySheet(transactionId);
 
             if (originalBill) {
-              const submittedBillMessage =
-                formatSubmittedBillMessage(originalBill);
+              const submittedBillMessage = await formatSubmittedBillMessage(
+                originalBill
+              );
               const submittedBillKeyboard =
                 createSubmittedBillKeyboard(transactionId);
 
@@ -1067,13 +1090,19 @@ MENU: Cancellation Confirmation 👇`;
       let keyboard;
       switch (transactionType) {
         case "income":
-          keyboard = createIncomeKeyboard(transactionId, transactionData);
+          keyboard = await createIncomeKeyboard(transactionId, transactionData);
           break;
         case "transfer":
-          keyboard = createTransferKeyboard(transactionId, transactionData);
+          keyboard = await createTransferKeyboard(
+            transactionId,
+            transactionData
+          );
           break;
         default: // expense and other types
-          keyboard = createExpenseKeyboard(transactionId, transactionData);
+          keyboard = await createExpenseKeyboard(
+            transactionId,
+            transactionData
+          );
       }
 
       const messageText = formatTransactionMessage(
@@ -1352,7 +1381,10 @@ async function getCategoryName(categoryId: string): Promise<string> {
   try {
     const categories = await googleSheetsAdapter.getCategories();
     const category = categories.find((cat: any) => cat.id === categoryId);
-    return category ? category.name : "Other";
+    if (category) return category.name;
+
+    // Return first category if available, otherwise "none"
+    return categories.length > 0 ? categories[0].name : "none";
   } catch (error) {
     console.error("Error getting category name:", error);
     // Fallback to hardcoded mapping
@@ -1366,7 +1398,7 @@ async function getCategoryName(categoryId: string): Promise<string> {
       healthcare: "Healthcare",
       education: "Education",
     };
-    return categoryMap[categoryId] || "Other";
+    return categoryMap[categoryId] || "none";
   }
 }
 
@@ -1377,7 +1409,10 @@ async function getAccountName(accountId: string): Promise<string> {
   try {
     const accounts = await googleSheetsAdapter.getAccounts();
     const account = accounts.find((acc: any) => acc.id === accountId);
-    return account ? account.name : "Main Card";
+    if (account) return account.name;
+
+    // Return first account if available, otherwise "none"
+    return accounts.length > 0 ? accounts[0].name : "none";
   } catch (error) {
     console.error("Error getting account name:", error);
     // Fallback to hardcoded mapping
@@ -1390,7 +1425,7 @@ async function getAccountName(accountId: string): Promise<string> {
       savings: "Savings",
       digital: "Digital Wallet",
     };
-    return accountMap[accountId] || "Main Card";
+    return accountMap[accountId] || "none";
   }
 }
 

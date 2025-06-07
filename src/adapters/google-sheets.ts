@@ -768,19 +768,13 @@ class GoogleSheetsAdapter {
   async setupConfigData(spreadsheetId: string) {
     const config = [
       ["Setting", "Value", "Description"],
-      ["default_account", "Main Card", "Default account for expenses"],
-      [
-        "default_category",
-        "Other",
-        "Default category for unclassified expenses",
-      ],
       ["timezone", "UTC", "Default timezone"],
       ["date_format", "YYYY-MM-DD", "Date format preference"],
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Config!A1:C5",
+      range: "Config!A1:C3",
       valueInputOption: "RAW",
       requestBody: {
         values: config,
@@ -841,8 +835,12 @@ class GoogleSheetsAdapter {
       // Use provided ID or generate a fallback timestamp-based ID
       const itemId = id || Date.now();
 
-      // Use provided currency or get default from default account
+      // Use provided currency or get default from first account
       const finalCurrency = currency_code || (await this.getDefaultCurrency());
+
+      // Get default account and category from first available
+      const defaultAccount = await this.getDefaultAccount();
+      const defaultCategory = await this.getDefaultCategory();
 
       const values = [
         itemId, // ID
@@ -850,9 +848,9 @@ class GoogleSheetsAdapter {
         title, // Title/Description
         totalPrice, // Amount
         finalCurrency.toUpperCase(), // Currency
-        "Other", // Category (default)
+        defaultCategory, // Category (first category or "none")
         "Expense", // Transaction Type (default)
-        "Main Card", // Account (default)
+        defaultAccount, // Account (first account or "none")
         "", // Destination Account
         "", // Destination Amount
         "", // Destination Currency
@@ -1004,29 +1002,42 @@ class GoogleSheetsAdapter {
       console.error("Error getting config from Google Sheets:", error);
       // Fallback to default config
       return {
-        default_account: "Main Card",
-        default_category: "Other",
         timezone: "UTC",
         date_format: "YYYY-MM-DD",
       };
     }
   }
 
+  async getDefaultAccount(): Promise<string> {
+    try {
+      const accounts = await this.getAccounts();
+      // Return first account name or "none" if no accounts exist
+      return accounts.length > 0 ? accounts[0].name : "none";
+    } catch (error) {
+      console.error("Error getting default account:", error);
+      return "none";
+    }
+  }
+
+  async getDefaultCategory(): Promise<string> {
+    try {
+      const categories = await this.getCategories();
+      // Return first category name or "none" if no categories exist
+      return categories.length > 0 ? categories[0].name : "none";
+    } catch (error) {
+      console.error("Error getting default category:", error);
+      return "none";
+    }
+  }
+
   async getDefaultCurrency(): Promise<string> {
     try {
-      // Get the default account from config
-      const config = await this.getConfig();
-      const defaultAccountName = config.default_account || "Main Card";
-
-      // Get all accounts and find the default one
+      // Get all accounts and use the first one for currency
       const accounts = await this.getAccounts();
-      const defaultAccount = accounts.find(
-        (acc: any) =>
-          acc.name === defaultAccountName || acc.id === defaultAccountName
-      );
+      const firstAccount = accounts.length > 0 ? accounts[0] : null;
 
-      // Return the currency from the default account, fallback to USD
-      return defaultAccount ? defaultAccount.currency : "USD";
+      // Return the currency from the first account, fallback to USD
+      return firstAccount ? firstAccount.currency : "USD";
     } catch (error) {
       console.error("Error getting default currency:", error);
       return "USD";
@@ -1654,9 +1665,9 @@ class GoogleSheetsAdapter {
           transactionData.title || transactionData.description || "Expense",
         amount: transactionData.amount || transactionData.total_price || 0,
         currency: transactionData.currency_code || "USD",
-        category: transactionData.category || "Other",
+        category: transactionData.category || (await this.getDefaultCategory()),
         transaction_type: transactionData.transaction_type || "expense",
-        account: transactionData.account || "Main Card",
+        account: transactionData.account || (await this.getDefaultAccount()),
         destination_account: transactionData.destination_account || "",
         destination_amount: transactionData.destination_amount || "",
         destination_currency: transactionData.destination_currency || "",
@@ -1838,9 +1849,9 @@ class GoogleSheetsAdapter {
           transactionData.title || transactionData.description || "Expense",
           transactionData.amount || transactionData.total_price || 0,
           transactionData.currency_code || "USD",
-          transactionData.category || "Other",
+          transactionData.category || (await this.getDefaultCategory()),
           transactionData.transaction_type || "expense",
-          transactionData.account || "Main Card",
+          transactionData.account || (await this.getDefaultAccount()),
           transactionData.destination_account || "",
           transactionData.destination_amount || "",
           transactionData.destination_currency || "",

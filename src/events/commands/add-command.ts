@@ -111,7 +111,7 @@ function registerAddCommand(bot: any) {
         validatedBillDetail,
         currencyValidation.warning
       );
-      const keyboard = createExpenseKeyboard(
+      const keyboard = await createExpenseKeyboard(
         transactionId,
         validatedBillDetail
       );
@@ -250,16 +250,19 @@ function registerAddCommand(bot: any) {
         let keyboard;
         switch (transactionType) {
           case "income":
-            keyboard = createIncomeKeyboard(transactionId, validatedBillDetail);
+            keyboard = await createIncomeKeyboard(
+              transactionId,
+              validatedBillDetail
+            );
             break;
           case "transfer":
-            keyboard = createTransferKeyboard(
+            keyboard = await createTransferKeyboard(
               transactionId,
               validatedBillDetail
             );
             break;
           default:
-            keyboard = createExpenseKeyboard(
+            keyboard = await createExpenseKeyboard(
               transactionId,
               validatedBillDetail
             );
@@ -312,8 +315,8 @@ function formatTransactionMessage(
     billDetail.total_price || billDetail.amount || "25.50"
   }
 📅 Date: ${formatDate(billDetail.date)}
-📂 Category: ${billDetail.category || "Other"}
-💳 Account: ${billDetail.account || "Main Card"}${warningText}
+📂 Category: ${billDetail.category || "none"}
+💳 Account: ${billDetail.account || "none"}${warningText}
 
 ---
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;

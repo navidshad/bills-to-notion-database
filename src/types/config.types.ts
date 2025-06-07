@@ -78,8 +78,8 @@ export const DEFAULT_CONFIG = {
   },
   defaults: {
     currency: "USD",
-    category: "Other",
-    account: "Main Card",
+    category: "none",
+    account: "none",
     transactionType: "Expense",
   },
 };

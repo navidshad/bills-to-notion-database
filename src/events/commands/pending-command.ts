@@ -33,7 +33,7 @@ function registerPendingCommand(bot: any) {
         const data = tempBill.transactionData;
         const amount = data.total_price || data.amount || "0.00";
         const currency = data.currency_code || "USD";
-        const category = data.category || "Other";
+        const category = data.category || "none";
         const account = data.account || "Unknown";
 
         messageText += `💰 **#${tempBill.billId}** - ${getCurrencySymbol(

@@ -129,7 +129,7 @@ export function generateEditTemplate(
     templateFields += `rate: ${rate}\n`;
     templateFields += `fee: ${fee}\n`;
   } else if (transactionType === "expense") {
-    const category = transactionData?.category || "Other";
+    const category = transactionData?.category || "none";
     templateFields += `category: ${category}\n`;
   }
 

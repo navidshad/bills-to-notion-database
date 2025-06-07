@@ -9,16 +9,20 @@ import {
   PLACEHOLDER_FEATURES,
   isPlaceholderFeature,
 } from "../types/callback.types";
+import { getDefaultAccount, getDefaultCategory } from "../utils/defaults";
 
 /**
  * Create expense transaction keyboard
  */
-function createExpenseKeyboard(transactionId: number, transactionData: any) {
+async function createExpenseKeyboard(
+  transactionId: number,
+  transactionData: any
+) {
   const amount =
     transactionData?.total_price || transactionData?.amount || "25.50";
   const date = formatDateForButton(transactionData?.date);
-  const category = transactionData?.category || "Other";
-  const account = transactionData?.account || "Main Card";
+  const category = transactionData?.category || (await getDefaultCategory());
+  const account = transactionData?.account || (await getDefaultAccount());
 
   // Encode currency in callback data if available
   const currency = transactionData?.currency_code || "";
@@ -85,12 +89,15 @@ function createExpenseKeyboard(transactionId: number, transactionData: any) {
 /**
  * Create income transaction keyboard
  */
-function createIncomeKeyboard(transactionId: number, transactionData: any) {
+async function createIncomeKeyboard(
+  transactionId: number,
+  transactionData: any
+) {
   const amount =
     transactionData?.total_price || transactionData?.amount || "500.00";
   const date = formatDateForButton(transactionData?.date);
   const source = transactionData?.source || "Salary";
-  const account = transactionData?.account || "Main Card";
+  const account = transactionData?.account || (await getDefaultAccount());
 
   // Encode currency in callback data if available
   const currency = transactionData?.currency_code || "";
@@ -157,12 +164,17 @@ function createIncomeKeyboard(transactionId: number, transactionData: any) {
 /**
  * Create transfer transaction keyboard
  */
-function createTransferKeyboard(transactionId: number, transactionData: any) {
+async function createTransferKeyboard(
+  transactionId: number,
+  transactionData: any
+) {
   const amount =
     transactionData?.total_price || transactionData?.amount || "100.00";
   const date = formatDateForButton(transactionData?.date);
   const fromAccount =
-    transactionData?.account || transactionData?.from_account || "Main Card";
+    transactionData?.account ||
+    transactionData?.from_account ||
+    (await getDefaultAccount());
   const toAccount =
     transactionData?.destination_account ||
     transactionData?.to_account ||
@@ -732,7 +744,9 @@ function createSubmittedBillKeyboard(transactionId: number) {
 /**
  * Format submitted bill message text (Phase 3)
  */
-function formatSubmittedBillMessage(transactionData: any): string {
+async function formatSubmittedBillMessage(
+  transactionData: any
+): Promise<string> {
   const typeEmoji = getTransactionTypeEmoji(
     transactionData.transaction_type || "expense"
   );
@@ -741,8 +755,8 @@ function formatSubmittedBillMessage(transactionData: any): string {
   );
   const amount =
     transactionData.amount || transactionData.total_price || "0.00";
-  const category = transactionData.category || "Other";
-  const account = transactionData.account || "Main Card";
+  const category = transactionData.category || (await getDefaultCategory());
+  const account = transactionData.account || (await getDefaultAccount());
   const date = formatDateForDisplay(transactionData.date);
   const currencySymbol = getCurrencySymbol(
     transactionData.currency_code || "USD"
