@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 
-class GoogleSheetsAdapter {
+export class GoogleSheetsAdapter {
   spreadsheetId: string | undefined;
   serviceAccountPath: string;
   auth: any;
