@@ -21,6 +21,7 @@ export enum CallbackActions {
   EDIT_CONTACT = "edit-contact",
   EDIT_PURPOSE = "edit-purpose",
   EDIT_DETAILS = "edit-details",
+  EDIT_MORE = "edit-more", // Template-based multi-field editing
 
   // Transaction type selections
   TYPE_EXPENSE = "type-expense",
@@ -175,17 +176,18 @@ export class CallbackDataParser {
  */
 export const PLACEHOLDER_FEATURES = [
   // Phase 3 features (SUBMIT removed - now implemented)
-  CallbackActions.EDIT_AMOUNT,
-  CallbackActions.EDIT_DATE,
-  CallbackActions.EDIT_DETAILS,
+  CallbackActions.EDIT_DETAILS, // Advanced details editing
   CallbackActions.NEW_CATEGORY,
   CallbackActions.NEW_ACCOUNT,
 
-  // Phase 4 features - REMOVED: Transfer features now implemented
+  // Phase 4 features - EDIT_MORE replaces individual field editing
+  // Individual field edits (EDIT_AMOUNT, EDIT_DATE, EDIT_EXCHANGE, EDIT_FEE)
+  // are now handled via template-based EDIT_MORE system
+
+  // Phase 4 account switchers - IMPLEMENTED
   // CallbackActions.EDIT_FROM,
   // CallbackActions.EDIT_TO,
-  // CallbackActions.EDIT_EXCHANGE,
-  // CallbackActions.EDIT_SOURCE,
+  // CallbackActions.EDIT_SOURCE, (still placeholder for income source editing)
 
   // Phase 5 features
   CallbackActions.EDIT_CONTACT,

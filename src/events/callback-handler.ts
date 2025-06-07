@@ -3,6 +3,7 @@
  */
 
 import * as textChain from "../text-chain";
+import { generateEditTemplate } from "../template-edit-chain";
 import googleSheetsAdapter from "../adapters/google-sheets";
 import { getReceiptDetail } from "../utils/receipt-processor";
 import { editTextMessage, BILL_REPLY_MARKUP } from "../utils/helpers";
@@ -1106,6 +1107,52 @@ Current rate will be used to calculate destination amount.`,
       bot.answerCallbackQuery(query.id, {
         text: "Send the exchange rate in the format shown below",
       });
+      return;
+    }
+
+    // Handle template-based multi-field editing
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_MORE
+      ) &&
+      transactionId
+    ) {
+      try {
+        // Get current transaction data
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (!tempBill || !tempBill.transactionData) {
+          bot.answerCallbackQuery(query.id, {
+            text: "Transaction not found",
+          });
+          return;
+        }
+
+        // Generate edit template
+        const templateMessage = generateEditTemplate(
+          transactionId,
+          tempBill.transactionData
+        );
+
+        // Send template message and track it for cleanup
+        await sendAndTrackMessage(
+          bot,
+          chatId,
+          templateMessage,
+          transactionId,
+          { parse_mode: "Markdown" },
+          "guide"
+        );
+
+        bot.answerCallbackQuery(query.id, {
+          text: "Edit template sent below - copy, edit, and send back",
+        });
+      } catch (error) {
+        console.error("Error generating edit template:", error);
+        bot.answerCallbackQuery(query.id, {
+          text: "Error generating template",
+        });
+      }
       return;
     }
 

@@ -226,22 +226,6 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `💰 Amount: ${getCurrencySymbol(fromCurrency)}${amount}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_AMOUNT,
-            transactionId
-          ),
-        },
-        {
-          text: `📅 Date: ${date}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_DATE,
-            transactionId
-          ),
-        },
-      ],
-      [
-        {
           text: `📤 From: ${fromAccountDisplay}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_FROM,
@@ -258,37 +242,14 @@ function createTransferKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `💱 Rate: ${exchangeRate} ${fromCurrency}/${toCurrency}`,
+          text: "✏️ Edit More (amount, date, rate, fee)",
           callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_EXCHANGE,
+            CallbackActions.EDIT_MORE,
             transactionId
           ),
         },
       ],
       [
-        {
-          text: feeButtonText,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_FEE,
-            transactionId
-          ),
-        },
-        {
-          text: "🔄 Re-Calculate",
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.RE_CALCULATE,
-            transactionId
-          ),
-        },
-      ],
-      [
-        {
-          text: `📋 Copy ID: #${transactionId}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.COPY_ID,
-            transactionId
-          ),
-        },
         {
           text: "❌ Cancel",
           callback_data: CallbackDataGenerator.forTransaction(
