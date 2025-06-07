@@ -30,10 +30,6 @@ const templateEditSchema = z.object({
         .string()
         .optional()
         .describe("Transaction category if provided (for expenses)"),
-      source: z
-        .string()
-        .optional()
-        .describe("Income source if provided (for income)"),
     })
     .describe("The fields to update with their new values"),
   success: z.boolean().describe("Whether the template was parsed successfully"),
@@ -73,7 +69,6 @@ VALID FIELDS:
 - rate: exchange rate numeric value (e.g., 1.18) - for transfer transactions
 - fee: fee amount numeric value (e.g., 3.00) - for transfer transactions
 - category: text string (e.g., "Food", "Transport") - for expense transactions
-- source: text string (e.g., "Salary", "Freelance") - for income transactions
 
 RULES:
 1. Extract transaction_id from /edit command
@@ -136,9 +131,6 @@ export function generateEditTemplate(
   } else if (transactionType === "expense") {
     const category = transactionData?.category || "Other";
     templateFields += `category: ${category}\n`;
-  } else if (transactionType === "income") {
-    const source = transactionData?.source || "Salary";
-    templateFields += `source: ${source}\n`;
   }
 
   return `📝 Edit Transaction #${transactionId}

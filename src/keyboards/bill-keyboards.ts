@@ -127,7 +127,7 @@ function createIncomeKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: "✏️ Edit More (amount, date, source)",
+          text: "✏️ Edit More (amount, date)",
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_MORE,
             transactionId
@@ -516,6 +516,70 @@ async function createAccountKeyboard(
 }
 
 /**
+ * Create income source selection keyboard
+ */
+async function createIncomeSourceKeyboard(transactionId: number) {
+  const googleSheetsAdapter = (await import("../adapters/google-sheets"))
+    .default;
+  const incomeSources = await googleSheetsAdapter.getIncomeSources();
+
+  // Create rows of 2 income sources each
+  const sourceRows = [];
+  for (let i = 0; i < incomeSources.length; i += 2) {
+    const row = [];
+
+    // First income source in the row
+    if (incomeSources[i]) {
+      row.push({
+        text: `${incomeSources[i].emoji} ${incomeSources[i].name}`,
+        callback_data: CallbackDataGenerator.forIncomeSourceSelect(
+          incomeSources[i].id,
+          transactionId
+        ),
+      });
+    }
+
+    // Second income source in the row (if exists)
+    if (incomeSources[i + 1]) {
+      row.push({
+        text: `${incomeSources[i + 1].emoji} ${incomeSources[i + 1].name}`,
+        callback_data: CallbackDataGenerator.forIncomeSourceSelect(
+          incomeSources[i + 1].id,
+          transactionId
+        ),
+      });
+    }
+
+    sourceRows.push(row);
+  }
+
+  // Add create new income source and back buttons
+  sourceRows.push([
+    {
+      text: "➕ Create New Income Source",
+      callback_data: CallbackDataGenerator.forTransaction(
+        CallbackActions.NEW_INCOME_SOURCE,
+        transactionId
+      ),
+    },
+  ]);
+
+  sourceRows.push([
+    {
+      text: "← Back to Transaction",
+      callback_data: CallbackDataGenerator.forTransaction(
+        CallbackActions.BACK_TRANSACTION,
+        transactionId
+      ),
+    },
+  ]);
+
+  return {
+    inline_keyboard: sourceRows,
+  };
+}
+
+/**
  * Create confirmation keyboard
  */
 function createConfirmationKeyboard(transactionId: number) {
@@ -569,9 +633,6 @@ const PLACEHOLDER_MESSAGES = {
     "✅ **Phase 3 Feature**\n\nTransaction submission coming in Phase 3!\n\nCurrent Phase 2 Status:\n• TempBills system and submission logic will be implemented next\n• For now, transactions are auto-saved for testing",
 
   // Phase 4 features - Transfer & Exchange implemented ✅
-
-  edit_source:
-    "💰 **Phase 4 Feature**\n\nIncome source editing coming in Phase 4!\n\nUpcoming:\n• Income source management\n• Recurring income detection\n• Advanced income categorization",
 
   // Phase 5 features - Debt Management
   edit_contact:
@@ -761,6 +822,7 @@ export {
   createTransactionTypeKeyboard,
   createCategoryKeyboard,
   createAccountKeyboard,
+  createIncomeSourceKeyboard,
   createConfirmationKeyboard,
   handlePlaceholderButton,
   formatDateForButton,

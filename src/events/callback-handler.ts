@@ -15,6 +15,7 @@ import {
   createTransactionTypeKeyboard,
   createCategoryKeyboard,
   createAccountKeyboard,
+  createIncomeSourceKeyboard,
   handlePlaceholderButton,
   createSubmittedBillKeyboard,
   formatSubmittedBillMessage,
@@ -88,8 +89,20 @@ function formatTransactionMessage(
 
 ---
 MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
+  } else if (type === "income") {
+    // For income transactions, show source instead of category
+    const source = transactionData?.source || "Salary";
+    const account = transactionData?.account || "Main Card";
+
+    return `💰 Amount: ${currencySymbol}${amount}
+📅 Date: ${date}
+📤 Source: ${source}
+💳 Account: ${account}${warningText}
+
+---
+MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
   } else {
-    // For expense and income transactions
+    // For expense transactions
     const category = transactionData?.category || "Other";
     const account = transactionData?.account || "Main Card";
 
@@ -249,6 +262,26 @@ function registerCallbackHandler(bot: any) {
       const messageText = currency
         ? `💳 Select ${currency} Account for Transaction #${transactionId}`
         : `💳 Select Account for Transaction #${transactionId}`;
+
+      bot.editMessageText(messageText, {
+        chat_id: chatId,
+        message_id: message.message_id,
+        reply_markup: keyboard,
+      });
+
+      bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.EDIT_SOURCE
+      ) &&
+      transactionId
+    ) {
+      const keyboard = await createIncomeSourceKeyboard(transactionId);
+      const messageText = `💰 Select Income Source for Transaction #${transactionId}`;
 
       bot.editMessageText(messageText, {
         chat_id: chatId,
@@ -467,6 +500,67 @@ function registerCallbackHandler(bot: any) {
 
       const messageText = formatTransactionMessage(
         transactionType,
+        transactionId,
+        transactionData
+      );
+
+      bot.editMessageText(messageText, {
+        chat_id: chatId,
+        message_id: message.message_id,
+        reply_markup: keyboard,
+      });
+      return;
+    }
+
+    // Handle income source selections
+    if (
+      CallbackDataParser.startsWithAction(
+        callback_data,
+        CallbackActions.INCOME_SOURCE_SELECT
+      ) &&
+      transactionId
+    ) {
+      const sourceId = CallbackDataParser.extractIncomeSourceId(callback_data);
+      if (!sourceId) return;
+
+      const sourceName = await getIncomeSourceName(sourceId);
+
+      // Retrieve existing transaction data from TempBills and update source
+      let transactionData = {};
+      try {
+        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
+        if (tempBill && tempBill.transactionData) {
+          // Preserve all existing data and only update source
+          transactionData = {
+            ...tempBill.transactionData,
+            source: sourceName,
+          };
+
+          // Update TempBills with the new source information
+          await googleSheetsAdapter.updateTempBill(transactionId, {
+            transactionData: transactionData,
+          });
+        } else {
+          // Fallback if TempBill not found (shouldn't happen)
+          console.warn(
+            `TempBill not found for transaction ${transactionId}, using minimal data`
+          );
+          transactionData = { source: sourceName };
+        }
+      } catch (error) {
+        console.error("Error retrieving transaction data:", error);
+        // Fallback to minimal data
+        transactionData = { source: sourceName };
+      }
+
+      bot.answerCallbackQuery(query.id, {
+        text: `Income source changed to ${sourceName}`,
+      });
+
+      // Return to main transaction keyboard with updated source
+      const keyboard = createIncomeKeyboard(transactionId, transactionData);
+      const messageText = formatTransactionMessage(
+        "income",
         transactionId,
         transactionData
       );
@@ -1297,6 +1391,32 @@ async function getAccountName(accountId: string): Promise<string> {
       digital: "Digital Wallet",
     };
     return accountMap[accountId] || "Main Card";
+  }
+}
+
+/**
+ * Helper function to get display name for income source from Google Sheets
+ */
+async function getIncomeSourceName(sourceId: string): Promise<string> {
+  try {
+    const incomeSources = await googleSheetsAdapter.getIncomeSources();
+    const source = incomeSources.find((src: any) => src.id === sourceId);
+    return source ? source.name : "Other";
+  } catch (error) {
+    console.error("Error getting income source name:", error);
+    // Fallback to hardcoded mapping
+    const sourceMap: Record<string, string> = {
+      salary: "Salary",
+      freelance: "Freelance",
+      bonus: "Bonus",
+      investment: "Investment",
+      rental: "Rental",
+      business: "Business",
+      gift: "Gift",
+      refund: "Refund",
+      other_income: "Other",
+    };
+    return sourceMap[sourceId] || "Other";
   }
 }
 

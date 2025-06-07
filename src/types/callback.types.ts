@@ -31,8 +31,10 @@ export enum CallbackActions {
   // Category and account selections
   CATEGORY_SELECT = "select-category",
   ACCOUNT_SELECT = "select-account",
+  INCOME_SOURCE_SELECT = "select-income-source",
   NEW_CATEGORY = "new-category",
   NEW_ACCOUNT = "new-account",
+  NEW_INCOME_SOURCE = "new-income-source",
 
   // Transaction actions
   CANCEL = "cancel",
@@ -81,6 +83,16 @@ export class CallbackDataGenerator {
    */
   static forAccountSelect(accountId: string, transactionId: number): string {
     return `${CallbackActions.ACCOUNT_SELECT}_${accountId}_${transactionId}`;
+  }
+
+  /**
+   * Generate callback data for income source selection
+   */
+  static forIncomeSourceSelect(
+    sourceId: string,
+    transactionId: number
+  ): string {
+    return `${CallbackActions.INCOME_SOURCE_SELECT}_${sourceId}_${transactionId}`;
   }
 
   /**
@@ -138,6 +150,14 @@ export class CallbackDataParser {
   }
 
   /**
+   * Extract income source ID from income source selection callback
+   */
+  static extractIncomeSourceId(callbackData: string): string | null {
+    const match = callbackData.match(/^select-income-source_(.+)_\d+$/);
+    return match ? match[1] : null;
+  }
+
+  /**
    * Extract currency from account edit callback
    */
   static extractCurrency(callbackData: string): string | null {
@@ -182,7 +202,7 @@ export const PLACEHOLDER_FEATURES = [
   // Phase 4 account switchers - IMPLEMENTED
   // CallbackActions.EDIT_FROM,
   // CallbackActions.EDIT_TO,
-  // CallbackActions.EDIT_SOURCE, (now handled by template system)
+  // CallbackActions.EDIT_SOURCE, (now implemented with proper keyboard)
 
   // Phase 5 features
   CallbackActions.EDIT_CONTACT,
