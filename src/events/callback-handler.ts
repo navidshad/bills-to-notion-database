@@ -25,6 +25,11 @@ import {
   isPlaceholderFeature,
 } from "../types/callback.types";
 import BillManager, { BillState } from "../managers/bill-manager";
+import {
+  sendAndTrackMessage,
+  sendTemporaryMessage,
+  cleanupTrackedMessages,
+} from "../utils/message-tracker";
 
 /**
  * Format transaction message with details for display
@@ -167,19 +172,14 @@ function registerCallbackHandler(bot: any) {
     if (isPlaceholderFeature(callback_data)) {
       const placeholderMessage = handlePlaceholderButton(callback_data);
 
-      // Send temporary notification message with phase information
-      const notificationMsg = await bot.sendMessage(
+      // Send temporary notification message with auto-delete
+      await sendTemporaryMessage(
+        bot,
         chatId,
         placeholderMessage,
-        {
-          parse_mode: "Markdown",
-        }
+        8000, // 8 seconds
+        { parse_mode: "Markdown" }
       );
-
-      // Auto-delete notification after 8 seconds (longer for detailed messages)
-      setTimeout(() => {
-        bot.deleteMessage(chatId, notificationMsg.message_id).catch(() => {});
-      }, 8000);
 
       // Answer callback query to remove loading state
       bot.answerCallbackQuery(query.id);
@@ -197,17 +197,14 @@ function registerCallbackHandler(bot: any) {
         CallbackDataParser.extractTransactionId(callback_data);
 
       if (transactionId) {
-        // Send a message with the copyable transaction ID
-        const copyMessage = await bot.sendMessage(
+        // Send temporary copy message with auto-delete
+        await sendTemporaryMessage(
+          bot,
           chatId,
           `📋 **Transaction ID:** \`#${transactionId}\`\n\n✨ *Tap to select and copy the ID above*`,
+          10000, // 10 seconds
           { parse_mode: "Markdown" }
         );
-
-        // Auto-delete the copy message after 10 seconds
-        setTimeout(() => {
-          bot.deleteMessage(chatId, copyMessage.message_id).catch(() => {});
-        }, 10000);
 
         bot.answerCallbackQuery(query.id, {
           text: `Transaction ID #${transactionId} sent below - tap to copy!`,
@@ -680,45 +677,9 @@ function registerCallbackHandler(bot: any) {
         }
 
         if (submitResult.success) {
-          // Clean up guide messages for initial submissions
-          if (
-            billState !== BillState.EDITING &&
-            (submitResult as any).tempBill
-          ) {
-            const tempBill = (submitResult as any).tempBill;
-            if (
-              tempBill.guideMessageIds &&
-              tempBill.guideMessageIds.length > 0
-            ) {
-              console.log(
-                `Cleaning up ${tempBill.guideMessageIds.length} guide messages for submitted bill #${transactionId}`
-              );
-
-              // Clean up all guide messages
-              for (const messageId of tempBill.guideMessageIds) {
-                try {
-                  await bot.deleteMessage(chatId, messageId);
-                  console.log(`Deleted guide message ${messageId}`);
-                } catch (error) {
-                  console.warn(
-                    `Could not delete guide message ${messageId}:`,
-                    error
-                  );
-                }
-              }
-
-              // Clean up user input message if exists
-              if (tempBill.userInputMessageId) {
-                try {
-                  await bot.deleteMessage(chatId, tempBill.userInputMessageId);
-                  console.log(
-                    `Deleted user input message ${tempBill.userInputMessageId}`
-                  );
-                } catch (error) {
-                  console.warn(`Could not delete user input message:`, error);
-                }
-              }
-            }
+          // Clean up tracked messages for initial submissions
+          if (billState !== BillState.EDITING) {
+            await cleanupTrackedMessages(bot, chatId, transactionId);
           }
 
           // Clean up edit messages for resubmissions (edit flow)
@@ -977,20 +938,20 @@ MENU: Cancellation Confirmation 👇`;
             });
           }
         } else {
-          // Regular temp bill cancellation (original behavior)
+          // Regular temp bill cancellation - clean up all tracked messages first
+          console.log(
+            `Cancelling transaction #${transactionId} and cleaning up tracked messages`
+          );
+
+          // Clean up all tracked messages before deleting the bill
+          await cleanupTrackedMessages(bot, chatId, transactionId);
+
+          // Delete the TempBill
           await googleSheetsAdapter.deleteTempBill(transactionId);
           console.log(`Transaction #${transactionId} deleted from TempBills`);
 
-          bot.deleteMessage(chatId, message.message_id).catch(() => {
-            // If deletion fails, edit the message instead
-            bot.editMessageText(
-              `❌ Transaction #${transactionId} has been cancelled and deleted.`,
-              {
-                chat_id: chatId,
-                message_id: message.message_id,
-              }
-            );
-          });
+          // Try to delete the transaction message itself
+          bot.deleteMessage(chatId, message.message_id).catch(() => {});
 
           bot.answerCallbackQuery(query.id, {
             text: `Transaction #${transactionId} cancelled`,
@@ -1127,8 +1088,9 @@ MENU: Cancellation Confirmation 👇`;
       ) &&
       transactionId
     ) {
-      // Send guide message for exchange rate input
-      const guideMessage = await bot.sendMessage(
+      // Send and track guide message for exchange rate input
+      await sendAndTrackMessage(
+        bot,
         chatId,
         `💱 Send the exchange rate for transaction #${transactionId}
 
@@ -1136,21 +1098,10 @@ Format: ${transactionId} [rate]
 Example: ${transactionId} 1.18
 
 Current rate will be used to calculate destination amount.`,
-        { parse_mode: "Markdown" }
+        transactionId,
+        { parse_mode: "Markdown" },
+        "guide"
       );
-
-      // Track guide message for cleanup
-      try {
-        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
-        if (tempBill) {
-          const currentGuideMessages = tempBill.guideMessageIds || [];
-          await googleSheetsAdapter.updateTempBill(transactionId, {
-            guideMessageIds: [...currentGuideMessages, guideMessage.message_id],
-          });
-        }
-      } catch (error) {
-        console.warn("Error tracking guide message:", error);
-      }
 
       bot.answerCallbackQuery(query.id, {
         text: "Send the exchange rate in the format shown below",
@@ -1166,8 +1117,9 @@ Current rate will be used to calculate destination amount.`,
       ) &&
       transactionId
     ) {
-      // Send guide message for fee input
-      const guideMessage = await bot.sendMessage(
+      // Send and track guide message for fee input
+      await sendAndTrackMessage(
+        bot,
         chatId,
         `💸 Send the transfer fee for transaction #${transactionId}
 
@@ -1176,21 +1128,10 @@ Example: ${transactionId} 3.50
 To remove fee: ${transactionId} 0
 
 Fee will be added to the total amount deducted from source account.`,
-        { parse_mode: "Markdown" }
+        transactionId,
+        { parse_mode: "Markdown" },
+        "guide"
       );
-
-      // Track guide message for cleanup
-      try {
-        const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
-        if (tempBill) {
-          const currentGuideMessages = tempBill.guideMessageIds || [];
-          await googleSheetsAdapter.updateTempBill(transactionId, {
-            guideMessageIds: [...currentGuideMessages, guideMessage.message_id],
-          });
-        }
-      } catch (error) {
-        console.warn("Error tracking guide message:", error);
-      }
 
       bot.answerCallbackQuery(query.id, {
         text: "Send the transfer fee in the format shown below",
@@ -1326,11 +1267,14 @@ Fee will be added to the total amount deducted from source account.`,
         );
       } catch (error: any) {
         console.error("Error adding to Google Sheets:", error);
-        bot.sendMessage(
+        // Send temporary error message (legacy database function - no transaction ID available)
+        await sendTemporaryMessage(
+          bot,
           query.message.chat.id,
           "❌ Error adding to database:\n" +
             error.message +
-            "\n\nMake sure your Google Sheets is properly configured."
+            "\n\nMake sure your Google Sheets is properly configured.",
+          10000 // Auto-delete after 10 seconds
         );
 
         editTextMessage(

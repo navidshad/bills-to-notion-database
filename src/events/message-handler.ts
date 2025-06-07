@@ -12,6 +12,10 @@ import {
   createIncomeKeyboard,
   formatSubmittedBillMessage,
 } from "../keyboards/bill-keyboards";
+import {
+  sendAndTrackMessage,
+  sendTemporaryMessage,
+} from "../utils/message-tracker";
 
 /**
  * Format transaction message with details for display
@@ -167,9 +171,14 @@ function registerMessageHandler(bot: any) {
           // Get transaction data from TempBills
           const tempBill = await googleSheetsAdapter.getTempBill(transactionId);
           if (!tempBill || !tempBill.transactionData) {
-            bot.sendMessage(
+            // Send error message and track it for cleanup
+            await sendAndTrackMessage(
+              bot,
               chatId,
-              `❌ Transaction #${transactionId} not found. Use /pending to see active transactions.`
+              `❌ Transaction #${transactionId} not found. Use /pending to see active transactions.`,
+              transactionId,
+              {},
+              "error"
             );
             return;
           }
@@ -308,10 +317,15 @@ function registerMessageHandler(bot: any) {
               );
             } catch (error) {
               console.error(`Error updating transaction message:`, error);
-              // Send a new message if editing fails
-              bot.sendMessage(chatId, `✅ ${updateMessage}\n\n${messageText}`, {
-                reply_markup: keyboard,
-              });
+              // Send a new message if editing fails and track it
+              await sendAndTrackMessage(
+                bot,
+                chatId,
+                `✅ ${updateMessage}\n\n${messageText}`,
+                transactionId,
+                { reply_markup: keyboard },
+                "processing"
+              );
             }
           }
         } catch (error) {
@@ -319,9 +333,14 @@ function registerMessageHandler(bot: any) {
             `Error processing field update for transaction #${transactionId}:`,
             error
           );
-          bot.sendMessage(
+          // Send error message and track it for cleanup
+          await sendAndTrackMessage(
+            bot,
             chatId,
-            `❌ Error updating transaction #${transactionId}. Please try again.`
+            `❌ Error updating transaction #${transactionId}. Please try again.`,
+            transactionId,
+            {},
+            "error"
           );
         }
 
@@ -332,9 +351,12 @@ function registerMessageHandler(bot: any) {
     // Skip processing messages that don't use /add command
     // Direct photos/text are no longer processed automatically
     if (!msg.text?.startsWith("/add")) {
-      bot.sendMessage(
+      // Send instruction message (temporary, no tracking needed)
+      await sendTemporaryMessage(
+        bot,
         chatId,
-        "📸 Use /add command to process transactions\n\nExamples:\n• /add [then send photo]\n• /add Spent $15 on coffee\n• 100 25.50 (to edit transaction #100)\n\nUse /help for more information."
+        "📸 Use /add command to process transactions\n\nExamples:\n• /add [then send photo]\n• /add Spent $15 on coffee\n• 100 25.50 (to edit transaction #100)\n\nUse /help for more information.",
+        8000 // Auto-delete after 8 seconds
       );
       return;
     }

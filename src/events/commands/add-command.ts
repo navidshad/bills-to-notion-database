@@ -12,6 +12,11 @@ import {
 } from "../../keyboards/bill-keyboards";
 import IDManager from "../../managers/id-manager";
 import GoogleSheetsAdapter from "../../adapters/google-sheets";
+import {
+  sendAndTrackMessage,
+  sendTemporaryMessage,
+  trackMessageForTransaction,
+} from "../../utils/message-tracker";
 
 /**
  * Register /add command
@@ -92,6 +97,13 @@ function registerAddCommand(bot: any) {
         [] // No guide messages yet
       );
 
+      // Track the processing message as it will become the transaction message
+      await trackMessageForTransaction(
+        transactionId,
+        previewMessage.message_id,
+        "processing"
+      );
+
       // Create transaction message with expense keyboard
       const transactionMessage = formatTransactionMessage(
         "expense",
@@ -115,9 +127,12 @@ function registerAddCommand(bot: any) {
       const description = msg.text.substring(4).trim(); // Remove "/add" prefix
 
       if (!description) {
-        bot.sendMessage(
+        // Send temporary instruction message (no tracking needed as it's not related to a transaction)
+        await sendTemporaryMessage(
+          bot,
           chatId,
-          "📸 Send me a photo of your receipt or describe your expense after /add"
+          "📸 Send me a photo of your receipt or describe your expense after /add",
+          8000 // Auto-delete after 8 seconds
         );
         return;
       }
@@ -214,6 +229,13 @@ function registerAddCommand(bot: any) {
           [] // No guide messages yet
         );
 
+        // Track the processing message as it will become the transaction message
+        await trackMessageForTransaction(
+          transactionId,
+          previewMessage.message_id,
+          "processing"
+        );
+
         // Create transaction message with appropriate keyboard based on detected type
         const transactionType =
           validatedBillDetail.transaction_type || "expense";
@@ -260,10 +282,12 @@ function registerAddCommand(bot: any) {
         );
       }
     } else {
-      // No photo or text provided
-      bot.sendMessage(
+      // No photo or text provided - send temporary instruction
+      await sendTemporaryMessage(
+        bot,
         chatId,
-        "📸 Send me a photo of your receipt or describe your expense\n\nExample:\n• /add [photo]\n• /add Spent $15 on coffee at Starbucks"
+        "📸 Send me a photo of your receipt or describe your expense\n\nExample:\n• /add [photo]\n• /add Spent $15 on coffee at Starbucks",
+        8000 // Auto-delete after 8 seconds
       );
     }
   });
