@@ -53,8 +53,7 @@ class GoogleSheetsAdapter {
       );
       const requiredSheets = [
         `Bills_${new Date().getFullYear()}`,
-        "Categories",
-        "Accounts",
+        "Reference",
         "Config",
         "TempBills",
       ];
@@ -84,10 +83,8 @@ class GoogleSheetsAdapter {
                     ? 15
                     : sheetName.startsWith("Bills_")
                     ? 20
-                    : sheetName === "Categories"
-                    ? 4 // ID, Name, Emoji, Description
-                    : sheetName === "Accounts"
-                    ? 5 // ID, Name, Emoji, Currency, Description
+                    : sheetName === "Reference"
+                    ? 11 // Categories(5) + Divider(1) + Accounts(5)
                     : 3, // Config sheet: Setting, Value, Description
               },
             },
@@ -102,8 +99,7 @@ class GoogleSheetsAdapter {
 
       // Set up headers and data for all required sheets
       await this.setupBillsHeaders(this.spreadsheetId);
-      await this.setupCategoriesData(this.spreadsheetId);
-      await this.setupAccountsData(this.spreadsheetId);
+      await this.setupReferenceData(this.spreadsheetId);
       await this.setupConfigData(this.spreadsheetId);
       await this.setupTempBillsHeaders(this.spreadsheetId);
 
@@ -174,45 +170,417 @@ class GoogleSheetsAdapter {
     });
   }
 
-  async setupCategoriesData(spreadsheetId: string) {
-    const range = "Categories!A1:D100";
-    const values = [
-      ["ID", "Name", "Emoji", "Description"],
-      ["food", "Food", "🍕", "Restaurants, groceries, takeout"],
-      ["transport", "Transport", "🚗", "Gas, public transit, rideshare"],
-      ["shopping", "Shopping", "👕", "Clothes, electronics, general purchases"],
-      ["utilities", "Utilities", "💡", "Electricity, water, internet, phone"],
-      ["healthcare", "Healthcare", "🏥", "Medical bills, pharmacy, insurance"],
-      ["entertainment", "Entertainment", "🎬", "Movies, games, subscriptions"],
-      ["housing", "Housing", "🏠", "Rent, mortgage, maintenance"],
-      ["education", "Education", "📚", "Books, courses, tuition"],
-      ["other", "Other", "📋", "Miscellaneous expenses"],
+  async setupReferenceData(spreadsheetId: string) {
+    // Setup combined Categories and Accounts in single sheet
+    const sheetName = "Reference";
+
+    // Row 1: Section titles
+    const sectionTitles = [
+      ["📂 CATEGORIES", "", "", "", "", ""], // A1:F1
     ];
 
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range,
+      range: `${sheetName}!A1:F1`,
       valueInputOption: "RAW",
-      requestBody: { values },
+      requestBody: { values: sectionTitles },
     });
-  }
 
-  async setupAccountsData(spreadsheetId: string) {
-    const range = "Accounts!A1:E100";
-    const values = [
-      ["ID", "Name", "Emoji", "Currency", "Description"],
+    await this.sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!G1:G1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [["💳 ACCOUNTS"]] },
+    });
+
+    // Row 2: Column headers
+    const categoryHeaders = [
+      ["ID", "Name", "Emoji", "Description", ""], // A2:E2 (empty column for spacing)
+    ];
+
+    const accountHeaders = [
+      ["ID", "Name", "Emoji", "Currency", "Description"], // G2:K2
+    ];
+
+    await this.sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A2:E2`,
+      valueInputOption: "RAW",
+      requestBody: { values: categoryHeaders },
+    });
+
+    await this.sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!G2:K2`,
+      valueInputOption: "RAW",
+      requestBody: { values: accountHeaders },
+    });
+
+    // Row 3+: Data rows
+    const categoriesData = [
+      ["food", "Food", "🍕", "Restaurants, groceries, takeout", ""],
+      ["transport", "Transport", "🚗", "Gas, public transit, rideshare", ""],
+      [
+        "shopping",
+        "Shopping",
+        "👕",
+        "Clothes, electronics, general purchases",
+        "",
+      ],
+      [
+        "utilities",
+        "Utilities",
+        "💡",
+        "Electricity, water, internet, phone",
+        "",
+      ],
+      [
+        "healthcare",
+        "Healthcare",
+        "🏥",
+        "Medical bills, pharmacy, insurance",
+        "",
+      ],
+      [
+        "entertainment",
+        "Entertainment",
+        "🎬",
+        "Movies, games, subscriptions",
+        "",
+      ],
+      ["housing", "Housing", "🏠", "Rent, mortgage, maintenance", ""],
+      ["education", "Education", "📚", "Books, courses, tuition", ""],
+      ["other", "Other", "📋", "Miscellaneous expenses", ""],
+    ];
+
+    const accountsData = [
       ["main_card", "Main Card", "💳", "USD", "Primary debit/credit card"],
       ["checking", "Checking", "🏦", "USD", "Main checking account"],
       ["euro_card", "Euro Card", "💳", "EUR", "European debit/credit card"],
       ["euro_cash", "Euro Cash", "💰", "EUR", "Physical euro cash"],
     ];
 
+    // Setup categories data (A3:E11)
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range,
+      range: `${sheetName}!A3:E${3 + categoriesData.length - 1}`,
       valueInputOption: "RAW",
-      requestBody: { values },
+      requestBody: { values: categoriesData },
     });
+
+    // Setup accounts data (G3:K6)
+    await this.sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!G3:K${3 + accountsData.length - 1}`,
+      valueInputOption: "RAW",
+      requestBody: { values: accountsData },
+    });
+
+    // Add visual formatting with colored borders and background
+    await this.formatReferenceSheet(spreadsheetId, sheetName);
+  }
+
+  async formatReferenceSheet(spreadsheetId: string, sheetName: string) {
+    try {
+      // Get sheet ID for formatting
+      const sheetId = await this.getSheetId(sheetName);
+
+      const requests = [
+        // Categories section title formatting (A1:F1)
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: 6,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.85, green: 0.92, blue: 1 }, // Light blue
+                textFormat: { bold: true, fontSize: 14 },
+                horizontalAlignment: "LEFT",
+                borders: {
+                  top: {
+                    style: "SOLID",
+                    width: 3,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  left: {
+                    style: "SOLID",
+                    width: 3,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                },
+              },
+            },
+            fields:
+              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
+          },
+        },
+        // Categories column headers formatting (A2:E2)
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: 2,
+              startColumnIndex: 0,
+              endColumnIndex: 5,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.9, green: 0.95, blue: 1 }, // Lighter blue
+                textFormat: { bold: true },
+                horizontalAlignment: "LEFT",
+                borders: {
+                  top: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  left: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,borders)",
+          },
+        },
+        // Categories data border (A3:E25) - extended range for user additions
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 2,
+              endRowIndex: 25,
+              startColumnIndex: 0,
+              endColumnIndex: 5,
+            },
+            cell: {
+              userEnteredFormat: {
+                borders: {
+                  left: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                  },
+                  top: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.7, green: 0.7, blue: 0.7 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.7, green: 0.7, blue: 0.7 },
+                  },
+                },
+              },
+            },
+            fields: "userEnteredFormat(borders)",
+          },
+        },
+        // Divider column formatting (F1:F25)
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 0,
+              endRowIndex: 25,
+              startColumnIndex: 5,
+              endColumnIndex: 6,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 }, // Light gray
+                textFormat: { bold: true, fontSize: 10 },
+                horizontalAlignment: "CENTER",
+                borders: {
+                  left: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.5, green: 0.5, blue: 0.5 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.5, green: 0.5, blue: 0.5 },
+                  },
+                },
+              },
+            },
+            fields:
+              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
+          },
+        },
+        // Accounts section title formatting (G1:K1)
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 6,
+              endColumnIndex: 11,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.85, green: 1, blue: 0.85 }, // Light green
+                textFormat: { bold: true, fontSize: 14 },
+                horizontalAlignment: "LEFT",
+                borders: {
+                  top: {
+                    style: "SOLID",
+                    width: 3,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  left: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 3,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                },
+              },
+            },
+            fields:
+              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
+          },
+        },
+        // Accounts column headers formatting (G2:K2)
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: 2,
+              startColumnIndex: 6,
+              endColumnIndex: 11,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.9, green: 1, blue: 0.9 }, // Lighter green
+                textFormat: { bold: true },
+                horizontalAlignment: "LEFT",
+                borders: {
+                  top: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  left: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,borders)",
+          },
+        },
+        // Accounts data border (G3:K25) - extended range for user additions
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 2,
+              endRowIndex: 25,
+              startColumnIndex: 6,
+              endColumnIndex: 11,
+            },
+            cell: {
+              userEnteredFormat: {
+                borders: {
+                  left: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 2,
+                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                  },
+                  top: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.7, green: 0.7, blue: 0.7 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.7, green: 0.7, blue: 0.7 },
+                  },
+                },
+              },
+            },
+            fields: "userEnteredFormat(borders)",
+          },
+        },
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests },
+      });
+
+      console.log(
+        "Successfully formatted Reference sheet with colored borders and LTR alignment"
+      );
+    } catch (error) {
+      console.error("Error formatting Reference sheet:", error);
+      // Don't throw error - formatting is optional
+    }
   }
 
   async setupConfigData(spreadsheetId: string) {
@@ -354,7 +722,7 @@ class GoogleSheetsAdapter {
 
   async getCategories() {
     try {
-      const range = "Categories!A2:D";
+      const range = "Reference!A3:D";
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
@@ -376,7 +744,7 @@ class GoogleSheetsAdapter {
 
   async getAccounts() {
     try {
-      const range = "Accounts!A2:E";
+      const range = "Reference!G3:K";
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
@@ -507,19 +875,19 @@ class GoogleSheetsAdapter {
       // Normalize currency to uppercase
       const normalizedCurrency = currency.toUpperCase();
 
-      // Get current accounts to find the next available row
+      // Get current accounts to find the next available row in accounts section (G3:K)
       const currentData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: "Accounts!A:E",
+        range: "Reference!G3:K",
       });
 
       const rows = currentData.data.values || [];
-      const nextRow = rows.length + 1;
+      const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
 
-      // Append the new account
+      // Append the new account to accounts section (starting at column G)
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Accounts!A${nextRow}:E${nextRow}`,
+        range: `Reference!G${nextRow}:K${nextRow}`,
         valueInputOption: "RAW",
         requestBody: {
           values: [[id, name, emoji, normalizedCurrency, description]],
@@ -532,6 +900,48 @@ class GoogleSheetsAdapter {
       return { success: true, id, name, currency: normalizedCurrency };
     } catch (error) {
       console.error("Error creating account:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new category in the Google Sheets
+   */
+  async createCategory(
+    id: string,
+    name: string,
+    emoji: string,
+    description: string
+  ) {
+    try {
+      if (!this.sheets) await this.initialize();
+      if (!this.spreadsheetId) {
+        throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+      }
+
+      // Get current categories to find the next available row in categories section (A3:E)
+      const currentData = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: "Reference!A3:E",
+      });
+
+      const rows = currentData.data.values || [];
+      const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
+
+      // Append the new category to categories section (starting at column A)
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Reference!A${nextRow}:E${nextRow}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[id, name, emoji, description, ""]], // Empty column E for spacing
+        },
+      });
+
+      console.log(`Successfully created category: ${name}`);
+      return { success: true, id, name };
+    } catch (error) {
+      console.error("Error creating category:", error);
       throw error;
     }
   }

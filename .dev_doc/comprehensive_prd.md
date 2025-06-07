@@ -32,8 +32,7 @@ Create a smart, conversational personal finance assistant that:
 
 #### 1.1 Sheet Structure
 - **Bills_{YEAR}**: Annual transaction sheets (e.g., Bills_2024, Bills_2025)
-- **Categories**: Expense categories and subcategories
-- **Accounts**: Bank accounts, credit cards, cash, etc.
+- **Reference**: Combined sheet with visual separation for categories (A-E), accounts (G-K), and income sources, with divider column (F)
 - **Config**: System settings and user preferences
 - **Dashboard**: Summary metrics and insights
 - **TempBills**: Temporary storage for unconfirmed transactions [MessageID, ProcessedData, InputMessageIDs, Timestamp]

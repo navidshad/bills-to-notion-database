@@ -34,8 +34,7 @@ function registerInitCommand(bot: any) {
 
 **Required Sheets:**
 ✅ Bills_${new Date().getFullYear()} - Your transactions for this year
-✅ Categories - Expense categories  
-✅ Accounts - Your payment accounts
+✅ Reference - Categories, accounts, and income sources with visual separation
 ✅ Config - System configuration
 ✅ TempBills - Temporary storage for processing
 
