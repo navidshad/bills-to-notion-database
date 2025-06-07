@@ -9,15 +9,11 @@
 export enum CallbackActions {
   // Transaction editing actions
   EDIT_TYPE = "edit-type",
-  EDIT_AMOUNT = "edit-amount",
-  EDIT_DATE = "edit-date",
   EDIT_CATEGORY = "edit-category",
   EDIT_ACCOUNT = "edit-account",
   EDIT_SOURCE = "edit-source",
   EDIT_FROM = "edit-from",
   EDIT_TO = "edit-to",
-  EDIT_EXCHANGE = "edit-exchange",
-  EDIT_FEE = "edit-fee",
   EDIT_CONTACT = "edit-contact",
   EDIT_PURPOSE = "edit-purpose",
   EDIT_DETAILS = "edit-details",
@@ -39,7 +35,6 @@ export enum CallbackActions {
   NEW_ACCOUNT = "new-account",
 
   // Transaction actions
-  COPY_ID = "copy-id",
   CANCEL = "cancel",
   SUBMIT = "submit",
   CONFIRM = "confirm",
@@ -181,8 +176,8 @@ export const PLACEHOLDER_FEATURES = [
   CallbackActions.NEW_ACCOUNT,
 
   // Phase 4 features - EDIT_MORE replaces individual field editing
-  // Individual field edits (EDIT_AMOUNT, EDIT_DATE, EDIT_EXCHANGE, EDIT_FEE)
-  // are now handled via template-based EDIT_MORE system
+  // Legacy individual field edits moved to legacy section above
+  // All field editing now handled via template-based EDIT_MORE system
 
   // Phase 4 account switchers - IMPLEMENTED
   // CallbackActions.EDIT_FROM,

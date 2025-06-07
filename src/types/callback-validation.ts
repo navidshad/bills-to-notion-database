@@ -11,17 +11,15 @@ import { CallbackActions } from "./callback.types";
 export const REQUIRED_HANDLERS = [
   // Transaction editing actions
   CallbackActions.EDIT_TYPE,
-  CallbackActions.EDIT_AMOUNT,
-  CallbackActions.EDIT_DATE,
   CallbackActions.EDIT_CATEGORY,
   CallbackActions.EDIT_ACCOUNT,
   CallbackActions.EDIT_SOURCE,
   CallbackActions.EDIT_FROM,
   CallbackActions.EDIT_TO,
-  CallbackActions.EDIT_EXCHANGE,
   CallbackActions.EDIT_CONTACT,
   CallbackActions.EDIT_PURPOSE,
   CallbackActions.EDIT_DETAILS,
+  CallbackActions.EDIT_MORE,
 
   // Transaction type selections
   CallbackActions.TYPE_EXPENSE,
@@ -39,7 +37,6 @@ export const REQUIRED_HANDLERS = [
   CallbackActions.NEW_ACCOUNT,
 
   // Transaction actions
-  CallbackActions.COPY_ID,
   CallbackActions.CANCEL,
   CallbackActions.SUBMIT,
   CallbackActions.CONFIRM,
@@ -61,6 +58,7 @@ export const IMPLEMENTED_HANDLERS = [
   CallbackActions.EDIT_TYPE,
   CallbackActions.EDIT_CATEGORY,
   CallbackActions.EDIT_ACCOUNT,
+  CallbackActions.EDIT_MORE,
   CallbackActions.CATEGORY_SELECT,
   CallbackActions.ACCOUNT_SELECT,
   CallbackActions.TYPE_EXPENSE,
@@ -71,7 +69,6 @@ export const IMPLEMENTED_HANDLERS = [
   // CallbackActions.TYPE_BORROW,
   // CallbackActions.TYPE_DEBT_PAYMENT,
   // CallbackActions.TYPE_DEBT_RECEIVED,
-  CallbackActions.COPY_ID,
   CallbackActions.CANCEL,
   CallbackActions.CONFIRM_CANCEL,
   CallbackActions.BACK_TRANSACTION,
@@ -84,8 +81,6 @@ export const IMPLEMENTED_HANDLERS = [
  */
 export const PLACEHOLDER_HANDLERS = [
   // Phase 3 features
-  CallbackActions.EDIT_AMOUNT,
-  CallbackActions.EDIT_DATE,
   CallbackActions.EDIT_DETAILS,
   CallbackActions.NEW_CATEGORY,
   CallbackActions.NEW_ACCOUNT,
@@ -95,7 +90,6 @@ export const PLACEHOLDER_HANDLERS = [
   // Phase 4 features
   CallbackActions.EDIT_FROM,
   CallbackActions.EDIT_TO,
-  CallbackActions.EDIT_EXCHANGE,
   CallbackActions.EDIT_SOURCE,
 
   // Phase 5 features
@@ -174,6 +168,7 @@ export const PHASE_MAPPING = {
     CallbackActions.EDIT_TYPE,
     CallbackActions.EDIT_CATEGORY,
     CallbackActions.EDIT_ACCOUNT,
+    CallbackActions.EDIT_MORE,
     CallbackActions.CATEGORY_SELECT,
     CallbackActions.ACCOUNT_SELECT,
     CallbackActions.TYPE_EXPENSE,
@@ -184,7 +179,6 @@ export const PHASE_MAPPING = {
     // CallbackActions.TYPE_BORROW,
     // CallbackActions.TYPE_DEBT_PAYMENT,
     // CallbackActions.TYPE_DEBT_RECEIVED,
-    CallbackActions.COPY_ID,
     CallbackActions.CANCEL,
     CallbackActions.CONFIRM_CANCEL,
     CallbackActions.BACK_TRANSACTION,
@@ -194,8 +188,6 @@ export const PHASE_MAPPING = {
 
   // Phase 3 - Input Collection & Field Edit
   phase3: [
-    CallbackActions.EDIT_AMOUNT,
-    CallbackActions.EDIT_DATE,
     CallbackActions.EDIT_DETAILS,
     CallbackActions.NEW_CATEGORY,
     CallbackActions.NEW_ACCOUNT,
@@ -207,7 +199,6 @@ export const PHASE_MAPPING = {
   phase4: [
     CallbackActions.EDIT_FROM,
     CallbackActions.EDIT_TO,
-    CallbackActions.EDIT_EXCHANGE,
     CallbackActions.EDIT_SOURCE,
   ],
 

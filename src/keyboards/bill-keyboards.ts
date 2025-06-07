@@ -554,12 +554,7 @@ function createConfirmationKeyboard(transactionId: number) {
  * Placeholder message responses for non-implemented features
  */
 const PLACEHOLDER_MESSAGES = {
-  // Phase 3 features - Input Collection & Field Edit
-  edit_amount:
-    "💰 **Phase 3 Feature**\n\nDirect amount editing coming in Phase 3!\n\nCurrent Phase 2 Status:\n• You can edit transaction fields via selection keyboards\n• Advanced input collection will be implemented next",
-
-  edit_date:
-    "📅 **Phase 3 Feature**\n\nDirect date editing coming in Phase 3!\n\nCurrent Phase 2 Status:\n• Date selection via keyboard coming soon\n• For now, date is auto-detected from receipt/text",
+  // Phase 3 features - Legacy (replaced by template system)
 
   edit_details:
     "✨ **Phase 3 Feature**\n\nAdvanced editing features coming in Phase 3!\n\nCurrent Phase 2 Status:\n• Edit individual fields using selection buttons\n• Advanced input collection and TempBills system coming next",

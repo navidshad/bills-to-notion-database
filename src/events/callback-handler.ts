@@ -187,33 +187,6 @@ function registerCallbackHandler(bot: any) {
       return;
     }
 
-    // Handle copy ID functionality
-    if (
-      CallbackDataParser.startsWithAction(
-        callback_data,
-        CallbackActions.COPY_ID
-      )
-    ) {
-      const transactionId =
-        CallbackDataParser.extractTransactionId(callback_data);
-
-      if (transactionId) {
-        // Send temporary copy message with auto-delete
-        await sendTemporaryMessage(
-          bot,
-          chatId,
-          `📋 **Transaction ID:** \`#${transactionId}\`\n\n✨ *Tap to select and copy the ID above*`,
-          10000, // 10 seconds
-          { parse_mode: "Markdown" }
-        );
-
-        bot.answerCallbackQuery(query.id, {
-          text: `Transaction ID #${transactionId} sent below - tap to copy!`,
-        });
-        return;
-      }
-    }
-
     // Extract transaction ID from callback data
     const transactionId =
       CallbackDataParser.extractTransactionId(callback_data);
@@ -1081,35 +1054,6 @@ MENU: Cancellation Confirmation 👇`;
       return;
     }
 
-    // Handle exchange rate editing
-    if (
-      CallbackDataParser.startsWithAction(
-        callback_data,
-        CallbackActions.EDIT_EXCHANGE
-      ) &&
-      transactionId
-    ) {
-      // Send and track guide message for exchange rate input
-      await sendAndTrackMessage(
-        bot,
-        chatId,
-        `💱 Send the exchange rate for transaction #${transactionId}
-
-Format: ${transactionId} [rate]
-Example: ${transactionId} 1.18
-
-Current rate will be used to calculate destination amount.`,
-        transactionId,
-        { parse_mode: "Markdown" },
-        "guide"
-      );
-
-      bot.answerCallbackQuery(query.id, {
-        text: "Send the exchange rate in the format shown below",
-      });
-      return;
-    }
-
     // Handle template-based multi-field editing
     if (
       CallbackDataParser.startsWithAction(
@@ -1153,36 +1097,6 @@ Current rate will be used to calculate destination amount.`,
           text: "Error generating template",
         });
       }
-      return;
-    }
-
-    // Handle transfer fee editing
-    if (
-      CallbackDataParser.startsWithAction(
-        callback_data,
-        CallbackActions.EDIT_FEE
-      ) &&
-      transactionId
-    ) {
-      // Send and track guide message for fee input
-      await sendAndTrackMessage(
-        bot,
-        chatId,
-        `💸 Send the transfer fee for transaction #${transactionId}
-
-Format: ${transactionId} [fee_amount]
-Example: ${transactionId} 3.50
-To remove fee: ${transactionId} 0
-
-Fee will be added to the total amount deducted from source account.`,
-        transactionId,
-        { parse_mode: "Markdown" },
-        "guide"
-      );
-
-      bot.answerCallbackQuery(query.id, {
-        text: "Send the transfer fee in the format shown below",
-      });
       return;
     }
 
