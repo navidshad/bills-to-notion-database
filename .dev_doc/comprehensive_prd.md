@@ -1355,10 +1355,10 @@ Bot: ✅ Expense #100 | $30.00 | Food | Main Card | Jan 15, 2024
 
 **Implementation Tasks**:
 - [ ] Add optional transfer fee field to transfer transactions
-- [ ] Enhance currency exchange visualization in transfer keyboard
-- [ ] Improve transfer message display to show both source and destination clearly
+- [x] Enhance currency exchange visualization in transfer keyboard
+- [x] Improve transfer message display to show both source and destination clearly
 - [ ] Add validation for currency exchange rates (user-provided)
-- [ ] Polish transfer keyboard UX and error messages
+- [x] Polish transfer keyboard UX and error messages
 - [ ] Update transfer data schema to properly handle fees
 - [ ] Use currency codes beside account labels in keyboards (e.g., "Main Card (USD)", "Euro Cash (EUR)")
 - [ ] Test multi-currency transfer scenarios
