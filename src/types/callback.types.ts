@@ -187,7 +187,7 @@ export const PLACEHOLDER_FEATURES = [
   // Phase 4 account switchers - IMPLEMENTED
   // CallbackActions.EDIT_FROM,
   // CallbackActions.EDIT_TO,
-  // CallbackActions.EDIT_SOURCE, (still placeholder for income source editing)
+  // CallbackActions.EDIT_SOURCE, (now handled by template system)
 
   // Phase 5 features
   CallbackActions.EDIT_CONTACT,

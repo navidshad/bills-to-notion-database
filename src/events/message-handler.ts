@@ -245,6 +245,16 @@ function registerMessageHandler(bot: any) {
           }
         }
 
+        if (fieldsToUpdate.category !== undefined) {
+          transactionData.category = fieldsToUpdate.category;
+          updatedFields.push(`category: ${fieldsToUpdate.category}`);
+        }
+
+        if (fieldsToUpdate.source !== undefined) {
+          transactionData.source = fieldsToUpdate.source;
+          updatedFields.push(`source: ${fieldsToUpdate.source}`);
+        }
+
         // Update TempBills with new data
         await googleSheetsAdapter.updateTempBill(transactionId, {
           transactionData: transactionData,

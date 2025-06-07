@@ -18,8 +18,22 @@ const templateEditSchema = z.object({
         .string()
         .optional()
         .describe("Transaction date in ISO format if provided"),
-      rate: z.number().optional().describe("Exchange rate if provided"),
-      fee: z.number().optional().describe("Transfer fee if provided"),
+      rate: z
+        .number()
+        .optional()
+        .describe("Exchange rate if provided (for transfers)"),
+      fee: z
+        .number()
+        .optional()
+        .describe("Transfer fee if provided (for transfers)"),
+      category: z
+        .string()
+        .optional()
+        .describe("Transaction category if provided (for expenses)"),
+      source: z
+        .string()
+        .optional()
+        .describe("Income source if provided (for income)"),
     })
     .describe("The fields to update with their new values"),
   success: z.boolean().describe("Whether the template was parsed successfully"),
@@ -56,8 +70,10 @@ field2: value2
 VALID FIELDS:
 - amount: numeric value (e.g., 100.50)
 - date: date string (convert to ISO format YYYY-MM-DD)
-- rate: exchange rate numeric value (e.g., 1.18)
-- fee: fee amount numeric value (e.g., 3.00)
+- rate: exchange rate numeric value (e.g., 1.18) - for transfer transactions
+- fee: fee amount numeric value (e.g., 3.00) - for transfer transactions
+- category: text string (e.g., "Food", "Transport") - for expense transactions
+- source: text string (e.g., "Salary", "Freelance") - for income transactions
 
 RULES:
 1. Extract transaction_id from /edit command
@@ -88,7 +104,7 @@ RULES:
 };
 
 /**
- * Generate edit template for a transaction
+ * Generate edit template for a transaction based on its type
  * @param transactionId - The transaction ID
  * @param transactionData - Current transaction data
  * @returns Template string for user to edit
@@ -102,8 +118,28 @@ export function generateEditTemplate(
   const date = transactionData?.date
     ? new Date(transactionData.date).toISOString().split("T")[0]
     : new Date().toISOString().split("T")[0];
-  const rate = transactionData?.exchange_rate || "1.0";
-  const fee = transactionData?.fee || "0";
+
+  const transactionType = transactionData?.transaction_type || "expense";
+
+  let templateFields = "";
+
+  // Base fields for all transaction types
+  templateFields += `amount: ${amount}\n`;
+  templateFields += `date: ${date}\n`;
+
+  // Add type-specific fields
+  if (transactionType === "transfer") {
+    const rate = transactionData?.exchange_rate || "1.0";
+    const fee = transactionData?.fee || "0";
+    templateFields += `rate: ${rate}\n`;
+    templateFields += `fee: ${fee}\n`;
+  } else if (transactionType === "expense") {
+    const category = transactionData?.category || "Other";
+    templateFields += `category: ${category}\n`;
+  } else if (transactionType === "income") {
+    const source = transactionData?.source || "Salary";
+    templateFields += `source: ${source}\n`;
+  }
 
   return `📝 Edit Transaction #${transactionId}
 
@@ -111,10 +147,6 @@ Copy this template, edit the values you want to change, and send it back:
 
 /edit ${transactionId}
 
-amount: ${amount}
-date: ${date}
-rate: ${rate}
-fee: ${fee}
-
+${templateFields}
 ✏️ Edit any field you want to change, then send the whole template back.`;
 }

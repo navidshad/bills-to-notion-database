@@ -40,22 +40,6 @@ function createExpenseKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `💰 Amount: $${amount}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_AMOUNT,
-            transactionId
-          ),
-        },
-        {
-          text: `📅 Date: ${date}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_DATE,
-            transactionId
-          ),
-        },
-      ],
-      [
-        {
           text: `📂 Category: ${category}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_CATEGORY,
@@ -71,12 +55,14 @@ function createExpenseKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `📋 Copy ID: #${transactionId}`,
+          text: "✏️ Edit More (amount, date)",
           callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.COPY_ID,
+            CallbackActions.EDIT_MORE,
             transactionId
           ),
         },
+      ],
+      [
         {
           text: "❌ Cancel",
           callback_data: CallbackDataGenerator.forTransaction(
@@ -126,22 +112,6 @@ function createIncomeKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `💰 Amount: $${amount}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_AMOUNT,
-            transactionId
-          ),
-        },
-        {
-          text: `📅 Date: ${date}`,
-          callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.EDIT_DATE,
-            transactionId
-          ),
-        },
-      ],
-      [
-        {
           text: `📤 Source: ${source}`,
           callback_data: CallbackDataGenerator.forTransaction(
             CallbackActions.EDIT_SOURCE,
@@ -157,12 +127,14 @@ function createIncomeKeyboard(transactionId: number, transactionData: any) {
       ],
       [
         {
-          text: `📋 Copy ID: #${transactionId}`,
+          text: "✏️ Edit More (amount, date, source)",
           callback_data: CallbackDataGenerator.forTransaction(
-            CallbackActions.COPY_ID,
+            CallbackActions.EDIT_MORE,
             transactionId
           ),
         },
+      ],
+      [
         {
           text: "❌ Cancel",
           callback_data: CallbackDataGenerator.forTransaction(

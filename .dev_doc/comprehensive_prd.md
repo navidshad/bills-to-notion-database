@@ -735,9 +735,11 @@ field3: value3
 - Cleaner keyboard layouts with fewer buttons
 
 **Phase 4 Implementation**:
-- Transfer transactions use "Edit More (amount, date, rate, fee)" button
-- Template generated with current values for easy editing
-- AI chain parses user template input and validates fields
+- **Transfer transactions**: "Edit More (amount, date, rate, fee)" button
+- **Expense transactions**: "Edit More (amount, date, category)" button  
+- **Income transactions**: "Edit More (amount, date, source)" button
+- Template generated dynamically based on transaction type
+- AI chain parses user template input and validates all field types
 - Automatic cleanup of template messages for clean chat history
 
 #### 6.0.2 ID Management System
@@ -1382,7 +1384,10 @@ Bot: ✅ Expense #100 | $30.00 | Food | Main Card | Jan 15, 2024
 **Implementation Completed**:
 - [x] Created template-edit-chain.ts with AI parsing capabilities
 - [x] Updated transfer keyboard to use single "Edit More" button
-- [x] Implemented template generation and parsing system
+- [x] Updated expense keyboard to use single "Edit More" button  
+- [x] Updated income keyboard to use single "Edit More" button
+- [x] Implemented dynamic template generation based on transaction type
+- [x] Enhanced AI parsing to handle all field types (amount, date, rate, fee, category, source)
 - [x] Added EDIT_MORE callback action and handler
 - [x] Updated message handler to process template edits
 - [x] Removed old individual field edit handlers
