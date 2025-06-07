@@ -39,6 +39,7 @@ export class BillManager {
     success: boolean;
     billState: BillState;
     submittedBill?: any;
+    tempBill?: any;
     error?: string;
   }> {
     try {
@@ -47,6 +48,22 @@ export class BillManager {
       const result = await googleSheetsAdapter.submitBillToYearlySheet(billId);
 
       if (result.success) {
+        // Clean up guide messages if tempBill data is available
+        if (
+          result.tempBill &&
+          result.tempBill.guideMessageIds &&
+          result.tempBill.guideMessageIds.length > 0
+        ) {
+          console.log(
+            `Cleaning up ${result.tempBill.guideMessageIds.length} guide messages for bill #${billId}`
+          );
+          // Note: Message cleanup requires bot instance and chatId, which should be handled by callback handler
+          // For now, we'll delete the TempBill and let the callback handler manage message cleanup
+        }
+
+        // Remove from TempBills after successful submission
+        await googleSheetsAdapter.deleteTempBill(billId);
+
         // Clear any edit tracking for this bill
         this.editTrackers.delete(billId);
 
@@ -54,6 +71,7 @@ export class BillManager {
           success: true,
           billState: BillState.SUBMITTED,
           submittedBill: result.yearlySheetRecord,
+          tempBill: result.tempBill, // Pass tempBill data for message cleanup
         };
       } else {
         return {

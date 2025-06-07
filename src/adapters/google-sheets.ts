@@ -832,10 +832,15 @@ class GoogleSheetsAdapter {
         ? JSON.stringify(updates.transactionData)
         : JSON.stringify(tempBill.transactionData);
 
+      // Merge guide message IDs instead of replacing
+      const currentGuideMessageIds = tempBill.guideMessageIds || [];
       const updatedGuideMessageIds =
         updates.guideMessageIds !== undefined
-          ? JSON.stringify(updates.guideMessageIds)
-          : JSON.stringify(tempBill.guideMessageIds);
+          ? JSON.stringify([
+              ...currentGuideMessageIds,
+              ...updates.guideMessageIds,
+            ])
+          : JSON.stringify(currentGuideMessageIds);
 
       const updatedUserInputMessageId =
         updates.userInputMessageId !== undefined
@@ -848,7 +853,7 @@ class GoogleSheetsAdapter {
         tempBill.billId, // bill_id (unchanged)
         tempBill.userId, // user_id (unchanged)
         updatedTransactionData, // transaction_data (updated)
-        updatedGuideMessageIds, // guide_message_ids (updated)
+        updatedGuideMessageIds, // guide_message_ids (merged)
         updatedUserInputMessageId, // user_input_message_id (updated)
         tempBill.originalMessageId, // original_message_id (unchanged)
         tempBill.createdAt, // created_at (unchanged)
@@ -994,9 +999,12 @@ class GoogleSheetsAdapter {
   /**
    * Submit a bill from TempBills to yearly sheet (Phase 3)
    */
-  async submitBillToYearlySheet(
-    billId: number
-  ): Promise<{ success: boolean; yearlySheetRecord?: any; error?: string }> {
+  async submitBillToYearlySheet(billId: number): Promise<{
+    success: boolean;
+    yearlySheetRecord?: any;
+    tempBill?: any;
+    error?: string;
+  }> {
     try {
       // Get the temp bill data
       const tempBill = await this.getTempBill(billId);
@@ -1065,11 +1073,11 @@ class GoogleSheetsAdapter {
         requestBody: { values },
       });
 
-      // Remove from TempBills
-      await this.deleteTempBill(billId);
+      // Remove from TempBills (this will be handled by BillManager for message cleanup)
+      // Note: TempBill deletion is now handled by BillManager to ensure proper message cleanup
 
       console.log(`Bill #${billId} successfully submitted to ${sheetName}`);
-      return { success: true, yearlySheetRecord };
+      return { success: true, yearlySheetRecord, tempBill };
     } catch (error) {
       console.error(`Error submitting bill #${billId} to yearly sheet:`, error);
       return {

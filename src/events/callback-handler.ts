@@ -680,6 +680,52 @@ function registerCallbackHandler(bot: any) {
         }
 
         if (submitResult.success) {
+          // Clean up guide messages for initial submissions
+          if (
+            billState !== BillState.EDITING &&
+            (submitResult as any).tempBill
+          ) {
+            const tempBill = (submitResult as any).tempBill;
+            if (
+              tempBill.guideMessageIds &&
+              tempBill.guideMessageIds.length > 0
+            ) {
+              console.log(
+                `Cleaning up ${tempBill.guideMessageIds.length} guide messages for submitted bill #${transactionId}`
+              );
+
+              // Clean up all guide messages
+              for (const messageId of tempBill.guideMessageIds) {
+                try {
+                  await bot.deleteMessage(chatId, messageId);
+                  console.log(`Deleted guide message ${messageId}`);
+                } catch (error) {
+                  console.warn(
+                    `Could not delete guide message ${messageId}:`,
+                    error
+                  );
+                }
+              }
+
+              // Clean up user input message if exists
+              if (tempBill.userInputMessageId) {
+                try {
+                  await bot.deleteMessage(chatId, tempBill.userInputMessageId);
+                  console.log(
+                    `Deleted user input message ${tempBill.userInputMessageId}`
+                  );
+                } catch (error) {
+                  console.warn(`Could not delete user input message:`, error);
+                }
+              }
+            }
+          }
+
+          // Clean up edit messages for resubmissions (edit flow)
+          if (billState === BillState.EDITING) {
+            await BillManager.cleanupEditMessages(transactionId, bot, chatId);
+          }
+
           // Get the final bill data for display
           let finalBillData;
           if (billState === BillState.EDITING) {
