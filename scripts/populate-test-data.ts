@@ -70,9 +70,21 @@ class DashboardTestDataPopulator {
     const testData: TestTransaction[] = [];
     let currentId = this.startId;
 
-    // Generate 3 months of realistic data
+    // Generate data from today going 3 months backward
+    const endDate = new Date(); // Today
     const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 3);
+    startDate.setMonth(startDate.getMonth() - 3); // 3 months ago
+
+    // Calculate the exact number of days between start and end
+    const totalDays = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    console.log(
+      `📅 Generating data from ${startDate.toISOString().split("T")[0]} to ${
+        endDate.toISOString().split("T")[0]
+      } (${totalDays} days)`
+    );
 
     // 1. EXPENSE TRANSACTIONS (60% of data)
     const expenseCategories = [
@@ -93,10 +105,13 @@ class DashboardTestDataPopulator {
       { name: "Savings", currency: "USD", weight: 0.05 },
     ];
 
-    // Generate expenses for 90 days
-    for (let day = 0; day < 90; day++) {
+    // Generate expenses for the calculated date range
+    for (let day = 0; day < totalDays; day++) {
       const currentDate = new Date(startDate);
       currentDate.setDate(startDate.getDate() + day);
+
+      // Skip future dates (in case of calculation edge cases)
+      if (currentDate > endDate) break;
 
       // 1-4 transactions per day (weighted towards weekdays)
       const isWeekend =
@@ -139,9 +154,12 @@ class DashboardTestDataPopulator {
     ];
 
     for (const income of incomeData) {
-      for (let day = 0; day < 90; day += income.frequency) {
+      for (let day = 0; day < totalDays; day += income.frequency) {
         const currentDate = new Date(startDate);
         currentDate.setDate(startDate.getDate() + day);
+
+        // Skip future dates
+        if (currentDate > endDate) break;
 
         testData.push({
           id: currentId++,
@@ -195,8 +213,11 @@ class DashboardTestDataPopulator {
         transferScenarios[Math.floor(Math.random() * transferScenarios.length)];
       const transferDate = new Date(startDate);
       transferDate.setDate(
-        startDate.getDate() + Math.floor(Math.random() * 90)
+        startDate.getDate() + Math.floor(Math.random() * totalDays)
       );
+
+      // Skip future dates
+      if (transferDate > endDate) continue;
 
       const sourceAmount = Math.floor(Math.random() * 500) + 50;
       const destinationAmount =
