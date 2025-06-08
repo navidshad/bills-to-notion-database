@@ -425,7 +425,7 @@ class DashboardTestDataPopulator {
       await this.sheetsAdapter.sheets.spreadsheets.values.update({
         spreadsheetId: this.sheetsAdapter.spreadsheetId,
         range: `${sheetName}!A${startRow}:R${endRow}`,
-        valueInputOption: "RAW",
+        valueInputOption: "USER_ENTERED",
         requestBody: { values: batch },
       });
 
