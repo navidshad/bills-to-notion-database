@@ -3,6 +3,7 @@ import {
   SheetsConfig,
   SheetConfiguration,
   SheetSection,
+  SectionConfigureContext,
 } from "../config/sheets-config";
 
 export class GoogleSheetsAdapter {
@@ -561,8 +562,8 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Setup account balances with formulas for real-time calculation
-        await this.setupAccountBalancesWithFormulas();
+        // Setup account balances using section configure method
+        await this.runSectionConfigure("dashboard", "account_balances");
       }
 
       // Create expense comparison pie chart
@@ -821,199 +822,54 @@ export class GoogleSheetsAdapter {
     }
   }
 
-  async setupAccountBalancesWithFormulas() {
-    const sheetName = SheetsConfig.getSheetName("dashboard");
-    const config = SheetsConfig.SHEETS.dashboard;
+  /**
+   * Run the configure method for a specific section
+   */
+  async runSectionConfigure(
+    sheetKey: string,
+    sectionId: string
+  ): Promise<void> {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
 
-    if (!config.grid) return;
+    const section = SheetsConfig.getSectionById(sheetKey, sectionId);
+    if (!section || !section.configure) {
+      console.log(
+        `Section ${sectionId} in sheet ${sheetKey} has no configure method`
+      );
+      return;
+    }
 
-    // Ensure positions are calculated first
-    SheetsConfig.calculateSectionPositions(config.grid);
+    const sheetName = SheetsConfig.getSheetName(sheetKey);
+    const allSections = SheetsConfig.getAllSections(sheetKey);
 
-    const balanceSection = SheetsConfig.getSectionById(
-      "dashboard",
-      "account_balances"
-    );
-    if (!balanceSection || !balanceSection._calculated) return;
-
-    // Get the reference sheet configuration and calculate positions
-    const referenceConfig = SheetsConfig.SHEETS.reference;
-    if (!referenceConfig.grid) return;
-
-    SheetsConfig.calculateSectionPositions(referenceConfig.grid);
-
-    const accountsSection = SheetsConfig.getSectionById(
-      "reference",
-      "accounts"
-    );
-    if (!accountsSection || !accountsSection._calculated) return;
-
-    // Get the configuration section for the year value location
-    const configSection = SheetsConfig.getSectionById(
-      "dashboard",
-      "configuration"
-    );
-    if (!configSection || !configSection._calculated) return;
+    // Create context for the section configure method
+    const context: SectionConfigureContext = {
+      sheetName,
+      spreadsheetId: this.spreadsheetId,
+      sheetsApi: this.sheets,
+      allSections,
+      limits: SheetsConfig.LIMITS,
+      getSheetConfig: (key: string) => SheetsConfig.SHEETS[key],
+      getSection: (key: string, id: string) =>
+        SheetsConfig.getSectionById(key, id),
+      columnToNumber: SheetsConfig.columnToNumber,
+      numberToColumn: SheetsConfig.numberToColumn,
+    };
 
     try {
-      const maxAccounts = SheetsConfig.LIMITS.MAX_ACCOUNTS;
-      console.log(
-        `Setting up dynamic formulas for up to ${maxAccounts} accounts from Reference sheet`
-      );
-
-      // Clear existing data first (clear all account rows)
-      const dataStartRow = balanceSection._calculated.startRow + 2; // After title and headers
-      const clearEndRow = dataStartRow + maxAccounts - 1;
-      const clearRange = `${sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${clearEndRow}`;
-      await this.sheets.spreadsheets.values.clear({
-        spreadsheetId: this.spreadsheetId,
-        range: clearRange,
-      });
-
-      // Calculate dynamic column addresses for the accounts section
-      const accountsStartCol = SheetsConfig.columnToNumber(
-        accountsSection._calculated.startColumn
-      );
-
-      // Field indices within the accounts section (based on field definitions)
-      const accountFields = accountsSection.table.fields;
-      const idFieldIndex = accountFields.findIndex(
-        (field) => field.name === "ID"
-      );
-      const nameFieldIndex = accountFields.findIndex(
-        (field) => field.name === "Name"
-      );
-      const emojiFieldIndex = accountFields.findIndex(
-        (field) => field.name === "Emoji"
-      );
-      const currencyFieldIndex = accountFields.findIndex(
-        (field) => field.name === "Currency"
-      );
-
-      // Calculate actual column letters
-      const idColumn = SheetsConfig.numberToColumn(
-        accountsStartCol + idFieldIndex
-      );
-      const nameColumn = SheetsConfig.numberToColumn(
-        accountsStartCol + nameFieldIndex
-      );
-      const emojiColumn = SheetsConfig.numberToColumn(
-        accountsStartCol + emojiFieldIndex
-      );
-      const currencyColumn = SheetsConfig.numberToColumn(
-        accountsStartCol + currencyFieldIndex
-      );
-
-      // Calculate the year value cell location in the configuration section
-      const configStartCol = SheetsConfig.columnToNumber(
-        configSection._calculated.startColumn
-      );
-      const valueFieldIndex = configSection.table.fields.findIndex(
-        (field) => field.name === "Value"
-      );
-      const yearValueColumn = SheetsConfig.numberToColumn(
-        configStartCol + valueFieldIndex
-      );
-      const yearValueRow = configSection._calculated.startRow + 2; // After title and headers, first data row
-
-      // Get bills sheet field configuration for dynamic column references
-      const billsConfig = SheetsConfig.SHEETS.bills;
-      if (!billsConfig.fields) {
-        throw new Error("Bills sheet configuration not found");
-      }
-
-      // Find field indices in bills sheet
-      const billsFields = billsConfig.fields;
-      const amountFieldIndex = billsFields.findIndex(
-        (field) => field.name === "Amount"
-      );
-      const accountFieldIndex = billsFields.findIndex(
-        (field) => field.name === "Account"
-      );
-      const transactionTypeFieldIndex = billsFields.findIndex(
-        (field) => field.name === "Transaction Type"
-      );
-      const destinationAccountFieldIndex = billsFields.findIndex(
-        (field) => field.name === "Destination Account"
-      );
-      const destinationAmountFieldIndex = billsFields.findIndex(
-        (field) => field.name === "Destination Amount"
-      );
-
-      // Convert to column letters (A=1, B=2, etc.)
-      const amountColumn = SheetsConfig.numberToColumn(amountFieldIndex + 1);
-      const accountColumn = SheetsConfig.numberToColumn(accountFieldIndex + 1);
-      const transactionTypeColumn = SheetsConfig.numberToColumn(
-        transactionTypeFieldIndex + 1
-      );
-      const destinationAccountColumn = SheetsConfig.numberToColumn(
-        destinationAccountFieldIndex + 1
-      );
-      const destinationAmountColumn = SheetsConfig.numberToColumn(
-        destinationAmountFieldIndex + 1
-      );
-
-      // Define transaction types as constants (from keyboards/bill-keyboards.ts)
-      const TRANSACTION_TYPES = {
-        INCOME: "Income",
-        EXPENSE: "Expense",
-        TRANSFER: "Transfer",
-      };
-
-      // Setup account data with formulas that reference the Reference sheet dynamically
-      const accountData = [];
-      for (let i = 0; i < maxAccounts; i++) {
-        const currentRow = dataStartRow + i; // Starting from calculated data start row
-        const referenceRow = accountsSection._calculated.startRow + 2 + i; // Accounts section data start + offset
-
-        // Account name formula using dynamic columns: =IF(Reference!{idColumn}{referenceRow}<>"", Reference!{emojiColumn}{referenceRow}&" "&Reference!{nameColumn}{referenceRow}, "")
-        const accountNameFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${emojiColumn}${referenceRow}&" "&Reference!${nameColumn}${referenceRow}, "")`;
-
-        // Currency formula using dynamic columns: =IF(Reference!{idColumn}{referenceRow}<>"", Reference!{currencyColumn}{referenceRow}, "")
-        const currencyFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${currencyColumn}${referenceRow}, "")`;
-
-        // Balance formula that uses the account ID from the reference sheet (bills sheet stores IDs, not names)
-        // Using dynamic year value and dynamic column references for bills sheet
-        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
-
-        accountData.push([
-          accountNameFormula, // Dynamic account name with emoji
-          currencyFormula, // Dynamic currency
-          balanceFormula, // Dynamic balance calculation
-        ]);
-      }
-
-      if (accountData.length > 0) {
-        const endRow = dataStartRow + accountData.length - 1;
-        const fullRange = `${sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${endRow}`;
-
-        console.log(`Writing dynamic account formulas to range: ${fullRange}`);
-        console.log(
-          `Using Reference sheet columns: ID=${idColumn}, Name=${nameColumn}, Emoji=${emojiColumn}, Currency=${currencyColumn}`
-        );
-        console.log(`Using Year value from: ${yearValueColumn}${yearValueRow}`);
-        console.log(
-          `Using Bills sheet columns: Amount=${amountColumn}, Account=${accountColumn}, TransactionType=${transactionTypeColumn}, DestinationAccount=${destinationAccountColumn}, DestinationAmount=${destinationAmountColumn}`
-        );
-
-        await this.sheets.spreadsheets.values.update({
-          spreadsheetId: this.spreadsheetId,
-          range: fullRange,
-          valueInputOption: "USER_ENTERED", // Important: Use USER_ENTERED for formulas
-          requestBody: {
-            values: accountData,
-          },
-        });
-
-        console.log(
-          "Dynamic account balances with formulas setup successfully"
-        );
-      } else {
-        console.log("No account formulas to process");
-      }
+      await section.configure(context);
+      console.log(`Section ${sectionId} configured successfully`);
     } catch (error) {
-      console.error("Error setting up account balances with formulas:", error);
+      console.error(`Error configuring section ${sectionId}:`, error);
+      throw error;
     }
+  }
+
+  async setupAccountBalancesWithFormulas() {
+    // Legacy method - now delegates to section configure
+    await this.runSectionConfigure("dashboard", "account_balances");
   }
 
   async getSelectedYear(): Promise<number> {
@@ -1361,8 +1217,8 @@ export class GoogleSheetsAdapter {
   async updateDashboard() {
     try {
       // With formula-based calculations, the dashboard updates automatically
-      // We can just re-setup the account balances formulas if needed
-      await this.setupAccountBalancesWithFormulas();
+      // We can just re-setup the account balances using section configure method
+      await this.runSectionConfigure("dashboard", "account_balances");
 
       // Recreate expense comparison pie chart with updated data
       await this.createExpenseComparisonPieChart();

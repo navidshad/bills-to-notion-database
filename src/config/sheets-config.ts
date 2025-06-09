@@ -25,6 +25,19 @@ export interface SectionMerging {
   rowspan?: number; // merge rows (vertical span)
 }
 
+// Interface for section configuration context
+export interface SectionConfigureContext {
+  sheetName: string;
+  spreadsheetId: string;
+  sheetsApi: any; // Google Sheets API instance
+  allSections: SheetSection[]; // All sections in the current sheet
+  limits: typeof SheetsConfig.LIMITS;
+  getSheetConfig: (sheetKey: string) => SheetConfiguration | undefined;
+  getSection: (sheetKey: string, sectionId: string) => SheetSection | undefined;
+  columnToNumber: (column: string) => number;
+  numberToColumn: (num: number) => string;
+}
+
 export interface SheetSection {
   id: string; // unique identifier
   title: string;
@@ -37,6 +50,8 @@ export interface SheetSection {
   };
   spacing?: SectionSpacing;
   merging?: SectionMerging;
+  // New: Configure method for section-specific setup logic
+  configure?: (context: SectionConfigureContext) => Promise<void>;
   // These will be calculated automatically based on grid position
   _calculated?: {
     startColumn: string;
@@ -382,6 +397,10 @@ export class SheetsConfig {
                 title: { red: 0.7, green: 0.95, blue: 0.7 },
                 header: { red: 0.8, green: 0.98, blue: 0.8 },
                 border: { red: 0.1, green: 0.7, blue: 0.1 },
+              },
+              configure: async (context: SectionConfigureContext) => {
+                // Account Balances configuration logic
+                await SheetsConfig.configureAccountBalances(context);
               },
             },
           ],
@@ -810,6 +829,187 @@ export class SheetsConfig {
       }
       return field.default || "";
     });
+  }
+
+  /**
+   * Configure Account Balances section with dynamic formulas
+   */
+  static async configureAccountBalances(
+    context: SectionConfigureContext
+  ): Promise<void> {
+    const balanceSection = context.getSection("dashboard", "account_balances");
+    if (!balanceSection || !balanceSection._calculated) {
+      console.warn("Account balances section not found or not calculated");
+      return;
+    }
+
+    // Get the configuration section for the year value location
+    const configSection = context.getSection("dashboard", "configuration");
+    if (!configSection || !configSection._calculated) {
+      console.warn("Configuration section not found or not calculated");
+      return;
+    }
+
+    // Get the reference sheet configuration and calculate positions
+    const referenceConfig = context.getSheetConfig("reference");
+    if (!referenceConfig?.grid) {
+      console.warn("Reference sheet configuration not found");
+      return;
+    }
+
+    // Calculate positions for reference sheet if not already done
+    this.calculateSectionPositions(referenceConfig.grid);
+
+    const accountsSection = context.getSection("reference", "accounts");
+    if (!accountsSection || !accountsSection._calculated) {
+      console.warn("Accounts section not found in reference sheet");
+      return;
+    }
+
+    try {
+      const maxAccounts = context.limits.MAX_ACCOUNTS;
+      console.log(
+        `Setting up dynamic formulas for up to ${maxAccounts} accounts from Reference sheet`
+      );
+
+      // Clear existing data first
+      const dataStartRow = balanceSection._calculated.startRow + 2;
+      const clearEndRow = dataStartRow + maxAccounts - 1;
+      const clearRange = `${context.sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${clearEndRow}`;
+
+      await context.sheetsApi.spreadsheets.values.clear({
+        spreadsheetId: context.spreadsheetId,
+        range: clearRange,
+      });
+
+      // Calculate dynamic column addresses for the accounts section
+      const accountsStartCol = context.columnToNumber(
+        accountsSection._calculated.startColumn
+      );
+
+      // Field indices within the accounts section
+      const accountFields = accountsSection.table.fields;
+      const idFieldIndex = accountFields.findIndex(
+        (field) => field.name === "ID"
+      );
+      const nameFieldIndex = accountFields.findIndex(
+        (field) => field.name === "Name"
+      );
+      const emojiFieldIndex = accountFields.findIndex(
+        (field) => field.name === "Emoji"
+      );
+      const currencyFieldIndex = accountFields.findIndex(
+        (field) => field.name === "Currency"
+      );
+
+      // Calculate actual column letters
+      const idColumn = context.numberToColumn(accountsStartCol + idFieldIndex);
+      const nameColumn = context.numberToColumn(
+        accountsStartCol + nameFieldIndex
+      );
+      const emojiColumn = context.numberToColumn(
+        accountsStartCol + emojiFieldIndex
+      );
+      const currencyColumn = context.numberToColumn(
+        accountsStartCol + currencyFieldIndex
+      );
+
+      // Calculate the year value cell location in the configuration section
+      const configStartCol = context.columnToNumber(
+        configSection._calculated.startColumn
+      );
+      const valueFieldIndex = configSection.table.fields.findIndex(
+        (field) => field.name === "Value"
+      );
+      const yearValueColumn = context.numberToColumn(
+        configStartCol + valueFieldIndex
+      );
+      const yearValueRow = configSection._calculated.startRow + 2;
+
+      // Get bills sheet field configuration
+      const billsConfig = context.getSheetConfig("bills");
+      if (!billsConfig?.fields) {
+        throw new Error("Bills sheet configuration not found");
+      }
+
+      // Find field indices in bills sheet
+      const billsFields = billsConfig.fields;
+      const amountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Amount"
+      );
+      const accountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Account"
+      );
+      const transactionTypeFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Transaction Type"
+      );
+      const destinationAccountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Destination Account"
+      );
+      const destinationAmountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Destination Amount"
+      );
+
+      // Convert to column letters
+      const amountColumn = context.numberToColumn(amountFieldIndex + 1);
+      const accountColumn = context.numberToColumn(accountFieldIndex + 1);
+      const transactionTypeColumn = context.numberToColumn(
+        transactionTypeFieldIndex + 1
+      );
+      const destinationAccountColumn = context.numberToColumn(
+        destinationAccountFieldIndex + 1
+      );
+      const destinationAmountColumn = context.numberToColumn(
+        destinationAmountFieldIndex + 1
+      );
+
+      // Define transaction types
+      const TRANSACTION_TYPES = {
+        INCOME: "Income",
+        EXPENSE: "Expense",
+        TRANSFER: "Transfer",
+      };
+
+      // Setup account data with formulas
+      const accountData = [];
+      for (let i = 0; i < maxAccounts; i++) {
+        const currentRow = dataStartRow + i;
+        const referenceRow = accountsSection._calculated.startRow + 2 + i;
+
+        // Account name formula
+        const accountNameFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${emojiColumn}${referenceRow}&" "&Reference!${nameColumn}${referenceRow}, "")`;
+
+        // Currency formula
+        const currencyFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${currencyColumn}${referenceRow}, "")`;
+
+        // Balance formula
+        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
+
+        accountData.push([accountNameFormula, currencyFormula, balanceFormula]);
+      }
+
+      if (accountData.length > 0) {
+        const endRow = dataStartRow + accountData.length - 1;
+        const fullRange = `${context.sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${endRow}`;
+
+        console.log(`Writing dynamic account formulas to range: ${fullRange}`);
+
+        await context.sheetsApi.spreadsheets.values.update({
+          spreadsheetId: context.spreadsheetId,
+          range: fullRange,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: accountData,
+          },
+        });
+
+        console.log(
+          "Dynamic account balances with formulas setup successfully"
+        );
+      }
+    } catch (error) {
+      console.error("Error setting up account balances with formulas:", error);
+    }
   }
 
   /**
