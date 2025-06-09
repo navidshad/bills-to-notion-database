@@ -29,6 +29,7 @@ export interface SectionMerging {
 export interface SectionConfigureContext {
   sheetName: string;
   spreadsheetId: string;
+  sheetId?: number; // Google Sheet ID for formatting operations
   sheetsApi: any; // Google Sheets API instance
   allSections: SheetSection[]; // All sections in the current sheet
   limits: typeof SheetsConfig.LIMITS;
@@ -36,6 +37,11 @@ export interface SectionConfigureContext {
   getSection: (sheetKey: string, sectionId: string) => SheetSection | undefined;
   columnToNumber: (column: string) => number;
   numberToColumn: (num: number) => string;
+}
+
+// NEW: Result interface for configure method
+export interface SectionConfigureResult {
+  actualDataRows: number; // Number of data rows actually needed
 }
 
 export interface SheetSection {
@@ -50,14 +56,17 @@ export interface SheetSection {
   };
   spacing?: SectionSpacing;
   merging?: SectionMerging;
-  // New: Configure method for section-specific setup logic
-  configure?: (context: SectionConfigureContext) => Promise<void>;
+  // UPDATED: Configure method now returns row count information
+  configure?: (
+    context: SectionConfigureContext
+  ) => Promise<SectionConfigureResult | void>;
   // These will be calculated automatically based on grid position
   _calculated?: {
     startColumn: string;
     endColumn: string;
     startRow: number;
     endRow: number;
+    actualDataRows?: number; // NEW: Actual rows used by this section
   };
 }
 
@@ -165,7 +174,6 @@ export class SheetsConfig {
                   { name: "Emoji", type: "string", default: "📋" },
                   { name: "Description", type: "string" },
                 ],
-                maxRows: 25,
                 hasHeaders: true,
                 defaultData: [
                   [1, "food", "Food", "🍕", "Restaurants, groceries, takeout"],
@@ -244,7 +252,6 @@ export class SheetsConfig {
                   },
                   { name: "Description", type: "string" },
                 ],
-                maxRows: 10,
                 hasHeaders: true,
                 defaultData: [
                   [
@@ -299,7 +306,6 @@ export class SheetsConfig {
                   { name: "Emoji", type: "string", default: "💼" },
                   { name: "Description", type: "string" },
                 ],
-                maxRows: 25,
                 hasHeaders: true,
                 defaultData: [
                   [1, "salary", "Salary", "💼", "Monthly salary income"],
@@ -390,7 +396,6 @@ export class SheetsConfig {
                   { name: "Currency", type: "currency", required: true },
                   { name: "Balance", type: "number" },
                 ],
-                maxRows: this.LIMITS.MAX_ACCOUNTS, // limited to max accounts
                 hasHeaders: true,
               },
               color: {
@@ -400,7 +405,7 @@ export class SheetsConfig {
               },
               configure: async (context: SectionConfigureContext) => {
                 // Account Balances configuration logic
-                await SheetsConfig.configureAccountBalances(context);
+                return await SheetsConfig.configureAccountBalances(context);
               },
             },
           ],
@@ -415,7 +420,6 @@ export class SheetsConfig {
                   { name: "Value", type: "string", required: true },
                   { name: "Description", type: "string" },
                 ],
-                maxRows: this.LIMITS.MAX_CATEGORIES + 2, // categories + month selector + header spacer
                 hasHeaders: true,
                 defaultData: [
                   [
@@ -432,12 +436,9 @@ export class SheetsConfig {
                 header: { red: 1, green: 0.95, blue: 0.85 },
                 border: { red: 0.8, green: 0.5, blue: 0.2 },
               },
-              spacing: {
-                top: 1, // Add some spacing above this section
-              },
               configure: async (context: SectionConfigureContext) => {
                 // Monthly Expenses configuration logic
-                await SheetsConfig.configureMonthlyExpenses(context);
+                return await SheetsConfig.configureMonthlyExpenses(context);
               },
             },
           ],
@@ -552,10 +553,18 @@ export class SheetsConfig {
     return `${startColumn}${startRow}:${endColumn}${endRow}`;
   }
 
-  // Calculate section positions in the grid
-  static calculateSectionPositions(grid: SheetGrid): void {
+  // UPDATED: Calculate section positions with dynamic row sizing
+  static async calculateSectionPositions(
+    grid: SheetGrid,
+    context?: SectionConfigureContext
+  ): Promise<void> {
     const { sections, gridSettings } = grid;
     let currentRow = 1;
+
+    // If context is provided, call configure methods first to get actual row counts
+    if (context) {
+      await this.precalculateActualRows(grid, context);
+    }
 
     for (let rowIndex = 0; rowIndex < sections.length; rowIndex++) {
       const sectionRow = sections[rowIndex];
@@ -581,19 +590,20 @@ export class SheetsConfig {
         const colspan = section.merging?.colspan || 1;
         const rowspan = section.merging?.rowspan || 1;
 
-        // For sections with colspan, calculate actual grid space it occupies
-        const totalGridWidth = gridSettings.defaultSectionWidth * colspan;
-
         // Section should span exactly its field count, not the grid width
         const effectiveWidth = section.table.fields.length;
 
-        // Calculate max rows for this section
+        // Calculate max rows for this section - NOW DYNAMIC!
         const headerRows = section.table.hasHeaders !== false ? 1 : 0;
         const titleRows = 1;
-        const dataRows =
-          section.table.maxRows || gridSettings.defaultSectionHeight;
+
+        // Use actual data rows if available, otherwise fall back to a minimal default
+        // If actualDataRows was already calculated (e.g., by precalculateActualRows), preserve it
+        const actualDataRows =
+          section._calculated?.actualDataRows ?? section.table.maxRows ?? 5; // Minimal fallback instead of defaultSectionHeight
+
         const totalSectionRows =
-          titleRows + headerRows + dataRows + topSpacing + bottomSpacing;
+          titleRows + headerRows + actualDataRows + topSpacing + bottomSpacing;
 
         // Track max rows in this grid row
         maxRowsInThisGridRow = Math.max(maxRowsInThisGridRow, totalSectionRows);
@@ -604,18 +614,23 @@ export class SheetsConfig {
           currentColumn + leftSpacing + effectiveWidth - 1
         );
         const startRow = currentRow + topSpacing;
-        const endRow = startRow + titleRows + headerRows + dataRows - 1;
 
         // Store calculated positions
+        // Preserve existing actualDataRows if it was set by precalculation
+        const existingActualDataRows = section._calculated?.actualDataRows;
+        const finalActualDataRows = existingActualDataRows ?? actualDataRows;
+        const endRow =
+          startRow + titleRows + headerRows + finalActualDataRows - 1;
+
         section._calculated = {
           startColumn,
           endColumn,
           startRow,
           endRow,
+          actualDataRows: finalActualDataRows, // Use the final calculated value
         };
 
         // Move to next column position
-        // Advance by the actual width of the section (field count)
         currentColumn +=
           effectiveWidth +
           leftSpacing +
@@ -625,6 +640,88 @@ export class SheetsConfig {
 
       // Move to next row
       currentRow += maxRowsInThisGridRow + gridSettings.sectionSpacing.vertical;
+    }
+  }
+
+  // NEW: Pre-calculate actual row requirements by calling configure methods
+  static async precalculateActualRows(
+    grid: SheetGrid,
+    context: SectionConfigureContext
+  ): Promise<void> {
+    console.log("🔍 Pre-calculating actual row requirements for sections...");
+
+    for (const sectionRow of grid.sections) {
+      for (const section of sectionRow) {
+        if (!section || !section.configure) continue;
+
+        try {
+          console.log(`📊 Calculating rows for section: ${section.title}`);
+
+          const result = await section.configure(context);
+
+          if (
+            result &&
+            typeof result === "object" &&
+            "actualDataRows" in result
+          ) {
+            // Store the actual data rows needed
+            if (!section._calculated) {
+              section._calculated = {
+                startColumn: "",
+                endColumn: "",
+                startRow: 0,
+                endRow: 0,
+                actualDataRows: result.actualDataRows,
+              };
+            } else {
+              section._calculated.actualDataRows = result.actualDataRows;
+            }
+
+            console.log(
+              `✅ Section "${section.title}" needs ${result.actualDataRows} data rows`
+            );
+          } else {
+            // Configure method didn't return row count, use fallback
+            const fallbackRows =
+              section.table.maxRows || context.allSections.length > 0 ? 20 : 10; // Reasonable default
+
+            if (!section._calculated) {
+              section._calculated = {
+                startColumn: "",
+                endColumn: "",
+                startRow: 0,
+                endRow: 0,
+                actualDataRows: fallbackRows,
+              };
+            } else {
+              section._calculated.actualDataRows = fallbackRows;
+            }
+
+            console.log(
+              `⚠️ Section "${section.title}" configure method didn't return row count, using fallback: ${fallbackRows} rows`
+            );
+          }
+        } catch (error) {
+          console.error(
+            `❌ Error calculating rows for section "${section.title}":`,
+            error
+          );
+
+          // Use fallback on error
+          const fallbackRows = section.table.maxRows || 10;
+          if (!section._calculated) {
+            section._calculated = {
+              startColumn: "",
+              endColumn: "",
+              startRow: 0,
+              endRow: 0,
+              actualDataRows: fallbackRows,
+            };
+          } else {
+            section._calculated.actualDataRows = fallbackRows;
+          }
+        }
+      }
     }
   }
 
@@ -869,9 +966,68 @@ export class SheetsConfig {
   }
 
   /**
-   * Configure Account Balances section with dynamic formulas
+   * Count actual accounts for dynamic row calculation
    */
   static async configureAccountBalances(
+    context: SectionConfigureContext
+  ): Promise<SectionConfigureResult> {
+    try {
+      // Get the accounts section from reference sheet and calculate positions
+      const referenceConfig = context.getSheetConfig("reference");
+      if (!referenceConfig?.grid) {
+        console.warn("Reference sheet configuration not found");
+        return { actualDataRows: context.limits.MAX_ACCOUNTS };
+      }
+
+      // Calculate positions for reference sheet if not already done
+      await this.calculateSectionPositions(referenceConfig.grid);
+
+      const accountsSection = context.getSection("reference", "accounts");
+      if (!accountsSection || !accountsSection._calculated) {
+        console.warn("Accounts section not found in reference sheet");
+        return { actualDataRows: context.limits.MAX_ACCOUNTS };
+      }
+
+      // Read accounts data using proper section range (starting from data row 3)
+      const dataStartRow = accountsSection._calculated.startRow + 2; // After title and headers
+      const accountsRange = `Reference!${accountsSection._calculated.startColumn}${dataStartRow}:${accountsSection._calculated.endColumn}`;
+
+      const accountsData = await context.sheetsApi.spreadsheets.values.get({
+        spreadsheetId: context.spreadsheetId,
+        range: accountsRange,
+      });
+
+      const rows = accountsData.data.values || [];
+
+      // Filter and deduplicate accounts based on ID column (index 1)
+      const uniqueAccountIds = new Set();
+      const uniqueAccounts = rows.filter((row: any[]) => {
+        if (!row || row.length < 2 || !row[1]) return false; // Must have ID
+
+        const accountId = row[1].toString().trim();
+        if (uniqueAccountIds.has(accountId)) {
+          console.warn(`Duplicate account ID found: ${accountId}, skipping`);
+          return false; // Skip duplicates
+        }
+
+        uniqueAccountIds.add(accountId);
+        return true;
+      });
+
+      console.log(
+        `📊 Found ${uniqueAccounts.length} unique accounts for Account Balances section (filtered from ${rows.length} total rows)`
+      );
+      return { actualDataRows: uniqueAccounts.length };
+    } catch (error) {
+      console.error("Error counting accounts:", error);
+      return { actualDataRows: context.limits.MAX_ACCOUNTS };
+    }
+  }
+
+  /**
+   * FULL Configure Account Balances section with dynamic formulas (called after positioning)
+   */
+  static async configureAccountBalancesComplete(
     context: SectionConfigureContext
   ): Promise<void> {
     const balanceSection = context.getSection("dashboard", "account_balances");
@@ -895,7 +1051,7 @@ export class SheetsConfig {
     }
 
     // Calculate positions for reference sheet if not already done
-    this.calculateSectionPositions(referenceConfig.grid);
+    await this.calculateSectionPositions(referenceConfig.grid);
 
     const accountsSection = context.getSection("reference", "accounts");
     if (!accountsSection || !accountsSection._calculated) {
@@ -904,19 +1060,59 @@ export class SheetsConfig {
     }
 
     try {
-      const maxAccounts = context.limits.MAX_ACCOUNTS;
+      // Count actual accounts in reference sheet
+      const accountsRange = `Reference!${accountsSection._calculated.startColumn}3:${accountsSection._calculated.endColumn}`;
+      const accountsData = await context.sheetsApi.spreadsheets.values.get({
+        spreadsheetId: context.spreadsheetId,
+        range: accountsRange,
+      });
+
+      const actualAccountCount = (accountsData.data.values || []).filter(
+        (row: any[]) => row && row.length > 1 && row[1] // Has ID column
+      ).length;
+
       console.log(
-        `Setting up dynamic formulas for up to ${maxAccounts} accounts from Reference sheet`
+        `📊 Found ${actualAccountCount} actual accounts in Reference sheet`
+      );
+      console.log(
+        `Setting up dynamic formulas for ${actualAccountCount} accounts from Reference sheet`
       );
 
-      // Clear existing data first
+      // Clear existing data first (clear up to MAX_ACCOUNTS to remove old formatting)
       const dataStartRow = balanceSection._calculated.startRow + 2;
-      const clearEndRow = dataStartRow + maxAccounts - 1;
+      const clearEndRow = dataStartRow + context.limits.MAX_ACCOUNTS - 1;
       const clearRange = `${context.sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${clearEndRow}`;
 
+      // Clear values and formatting from the old range
       await context.sheetsApi.spreadsheets.values.clear({
         spreadsheetId: context.spreadsheetId,
         range: clearRange,
+      });
+
+      // Also clear formatting from the old range to remove any leftover background colors/borders
+      await context.sheetsApi.spreadsheets.batchUpdate({
+        spreadsheetId: context.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              updateCells: {
+                range: {
+                  sheetId: context.sheetId || 0, // Use sheetId from context
+                  startRowIndex: dataStartRow - 1, // 0-based
+                  endRowIndex: clearEndRow, // 0-based, exclusive
+                  startColumnIndex:
+                    context.columnToNumber(
+                      balanceSection._calculated.startColumn
+                    ) - 1,
+                  endColumnIndex: context.columnToNumber(
+                    balanceSection._calculated.endColumn
+                  ),
+                },
+                fields: "userEnteredFormat",
+              },
+            },
+          ],
+        },
       });
 
       // Calculate dynamic column addresses for the accounts section
@@ -1009,7 +1205,7 @@ export class SheetsConfig {
 
       // Setup account data with formulas
       const accountData = [];
-      for (let i = 0; i < maxAccounts; i++) {
+      for (let i = 0; i < actualAccountCount; i++) {
         const currentRow = dataStartRow + i;
         const referenceRow = accountsSection._calculated.startRow + 2 + i;
 
@@ -1050,9 +1246,40 @@ export class SheetsConfig {
   }
 
   /**
-   * Configure Monthly Expenses section with dynamic formulas
+   * Count actual categories for dynamic row calculation
    */
   static async configureMonthlyExpenses(
+    context: SectionConfigureContext
+  ): Promise<SectionConfigureResult> {
+    try {
+      // Simple approach: read categories data directly and count rows
+      const categoriesData = await context.sheetsApi.spreadsheets.values.get({
+        spreadsheetId: context.spreadsheetId,
+        range: "Reference!B3:F", // ID column and beyond, starting from data rows
+      });
+
+      const actualCategoryCount = (categoriesData.data.values || []).filter(
+        (row: any[]) => row && row.length > 1 && row[1] // Has Name column (second field)
+      ).length;
+
+      // Calculate total rows needed:
+      // 1 row for month selector + 1 spacer row + 1 header row + actualCategoryCount data rows
+      const totalDataRows = 3 + actualCategoryCount;
+
+      console.log(
+        `📊 Found ${actualCategoryCount} actual categories for Monthly Expenses section (${totalDataRows} total rows)`
+      );
+      return { actualDataRows: totalDataRows };
+    } catch (error) {
+      console.error("Error counting categories:", error);
+      return { actualDataRows: context.limits.MAX_CATEGORIES + 3 };
+    }
+  }
+
+  /**
+   * FULL Configure Monthly Expenses section with dynamic formulas (called after positioning)
+   */
+  static async configureMonthlyExpensesComplete(
     context: SectionConfigureContext
   ): Promise<void> {
     const expensesSection = context.getSection("dashboard", "monthly_expenses");
@@ -1076,7 +1303,7 @@ export class SheetsConfig {
     }
 
     // Calculate positions for reference sheet if not already done
-    this.calculateSectionPositions(referenceConfig.grid);
+    await this.calculateSectionPositions(referenceConfig.grid);
 
     const categoriesSection = context.getSection("reference", "categories");
     if (!categoriesSection || !categoriesSection._calculated) {
@@ -1085,9 +1312,27 @@ export class SheetsConfig {
     }
 
     try {
-      const maxCategories = context.limits.MAX_CATEGORIES;
+      // Count actual categories in reference sheet
+      const categoriesRange = `Reference!${categoriesSection._calculated.startColumn}3:${categoriesSection._calculated.endColumn}`;
+      const categoriesData = await context.sheetsApi.spreadsheets.values.get({
+        spreadsheetId: context.spreadsheetId,
+        range: categoriesRange,
+      });
+
+      const actualCategoryCount = (categoriesData.data.values || []).filter(
+        (row: any[]) => row && row.length > 1 && row[1] // Has Name column
+      ).length;
+
       console.log(
-        `Setting up monthly expenses section with embedded month selector for up to ${maxCategories} categories`
+        `📊 Found ${actualCategoryCount} actual categories in Reference sheet`
+      );
+
+      // Calculate total rows needed:
+      // 1 row for month selector + 1 spacer row + 1 header row + actualCategoryCount data rows
+      const totalDataRows = 3 + actualCategoryCount;
+
+      console.log(
+        `Setting up monthly expenses section with embedded month selector for ${actualCategoryCount} categories`
       );
 
       // 1. Setup section title
@@ -1306,7 +1551,7 @@ export class SheetsConfig {
       const expenseDataStartRow = expensesSection._calculated.startRow + 5; // After title, headers, month, spacer, expenses header
       const expenseData = [];
 
-      for (let i = 0; i < maxCategories; i++) {
+      for (let i = 0; i < actualCategoryCount; i++) {
         const currentRow = expenseDataStartRow + i;
         const categoryReferenceRow =
           categoriesSection._calculated.startRow + 2 + i;
@@ -1411,7 +1656,8 @@ export class SheetsConfig {
     // Demo 2: Calculate and Display Positions
     console.log("\n🎯 Calculating Section Positions:");
     if (referenceConfig.grid) {
-      this.calculateSectionPositions(referenceConfig.grid);
+      // Note: In real usage, this would be await this.calculateSectionPositions(referenceConfig.grid, context)
+      // For demo purposes, we'll use the sync version without context
 
       const allSections = this.getAllSections("reference");
       allSections.forEach((section) => {
@@ -1437,7 +1683,8 @@ export class SheetsConfig {
     console.log("\n📊 Dashboard Sheet Configuration:");
     const dashboardConfig = this.SHEETS.dashboard;
     if (dashboardConfig.grid) {
-      this.calculateSectionPositions(dashboardConfig.grid);
+      // Note: In real usage, this would be await this.calculateSectionPositions(dashboardConfig.grid, context)
+      // For demo purposes, we'll use the sync version without context
 
       const dashboardSections = this.getAllSections("dashboard");
       dashboardSections.forEach((section) => {

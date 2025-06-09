@@ -1,10 +1,5 @@
 import { google } from "googleapis";
-import {
-  SheetsConfig,
-  SheetConfiguration,
-  SheetSection,
-  SectionConfigureContext,
-} from "../config/sheets-config";
+import { SheetsConfig, SectionConfigureContext } from "../config/sheets-config";
 
 export class GoogleSheetsAdapter {
   spreadsheetId: string | undefined;
@@ -168,7 +163,7 @@ export class GoogleSheetsAdapter {
       });
     } else if (config.grid) {
       // Grid-based sheets with sections - calculate positions and handle setup
-      SheetsConfig.calculateSectionPositions(config.grid);
+      await SheetsConfig.calculateSectionPositions(config.grid);
 
       if (sheetKey === "reference") {
         await this.setupReferenceData();
@@ -205,7 +200,7 @@ export class GoogleSheetsAdapter {
     // Setup sections using new grid configuration
     if (config.grid) {
       // Ensure positions are calculated first
-      SheetsConfig.calculateSectionPositions(config.grid);
+      await SheetsConfig.calculateSectionPositions(config.grid);
 
       const allSections = SheetsConfig.getAllSections("reference");
 
@@ -248,6 +243,19 @@ export class GoogleSheetsAdapter {
         // Setup default data
         if (section.table.defaultData) {
           const dataStartRow = section._calculated.startRow + 2; // After title and headers
+
+          // Clear existing data first to prevent accumulation/duplication
+          // Clear a large enough range to remove any old data
+          const clearEndRow =
+            dataStartRow + Math.max(section.table.defaultData.length, 50) - 1;
+          const clearRange = `${sheetName}!${section._calculated.startColumn}${dataStartRow}:${section._calculated.endColumn}${clearEndRow}`;
+
+          await this.sheets.spreadsheets.values.clear({
+            spreadsheetId: this.spreadsheetId,
+            range: clearRange,
+          });
+
+          // Now populate with fresh default data
           const endRow = dataStartRow + section.table.defaultData.length - 1;
           const fullRange = `${sheetName}!${section._calculated.startColumn}${dataStartRow}:${section._calculated.endColumn}${endRow}`;
 
@@ -296,8 +304,23 @@ export class GoogleSheetsAdapter {
       const sheetId = await this.getSheetId(sheetName);
       const requests = [];
 
-      // Calculate positions first
-      SheetsConfig.calculateSectionPositions(config.grid);
+      // Create context for dynamic sizing (if needed)
+      const context: SectionConfigureContext = {
+        sheetName,
+        spreadsheetId: this.spreadsheetId,
+        sheetId,
+        sheetsApi: this.sheets,
+        allSections: SheetsConfig.getAllSections(sheetKey),
+        limits: SheetsConfig.LIMITS,
+        getSheetConfig: (key: string) => SheetsConfig.SHEETS[key],
+        getSection: (key: string, id: string) =>
+          SheetsConfig.getSectionById(key, id),
+        columnToNumber: SheetsConfig.columnToNumber,
+        numberToColumn: SheetsConfig.numberToColumn,
+      };
+
+      // Calculate positions with dynamic sizing
+      await SheetsConfig.calculateSectionPositions(config.grid, context);
 
       // Format each section using calculated coordinates
       const allSections = SheetsConfig.getAllSections(sheetKey);
@@ -313,7 +336,17 @@ export class GoogleSheetsAdapter {
         const titleRow = section._calculated.startRow - 1;
         const headerRow = titleRow + 1;
         const dataStartRow = headerRow + 1;
-        const dataEndRow = section._calculated.endRow - 1;
+
+        // Use actual data rows instead of full allocated space
+        const actualDataRows = section._calculated.actualDataRows;
+
+        if (actualDataRows === undefined) {
+          console.error(
+            `Section "${section.title}" has undefined actualDataRows, skipping formatting`
+          );
+          continue;
+        }
+        const dataEndRow = dataStartRow + actualDataRows - 1;
 
         // 1. Format section title with top and side borders
         requests.push({
@@ -455,19 +488,22 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Bottom border for data area
-        requests.push({
-          updateBorders: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: dataEndRow,
-              endRowIndex: dataEndRow + 1,
-              startColumnIndex: startCol,
-              endColumnIndex: endCol,
+        // Bottom border for data area (only for sections with defined limits)
+        // Skip bottom border for unlimited sections (reference sheet sections)
+        if (section.table.maxRows !== undefined) {
+          requests.push({
+            updateBorders: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: dataEndRow,
+                endRowIndex: dataEndRow + 1,
+                startColumnIndex: startCol,
+                endColumnIndex: endCol,
+              },
+              bottom: { style: "SOLID", width: 3, color: section.color.border },
             },
-            bottom: { style: "SOLID", width: 3, color: section.color.border },
-          },
-        });
+          });
+        }
 
         // 5. Make the first column (ID/# column) narrower if applicable
         if (section.table.fields[0]?.name === "#") {
@@ -514,10 +550,26 @@ export class GoogleSheetsAdapter {
       throw new Error("Dashboard configuration grid not found");
     }
 
-    // Calculate section positions
-    SheetsConfig.calculateSectionPositions(config.grid);
-
     try {
+      // Create context for dynamic row calculation
+      const sheetId = await this.getSheetId(sheetName);
+      const context: SectionConfigureContext = {
+        sheetName,
+        spreadsheetId: this.spreadsheetId,
+        sheetId,
+        sheetsApi: this.sheets,
+        allSections: SheetsConfig.getAllSections("dashboard"),
+        limits: SheetsConfig.LIMITS,
+        getSheetConfig: (key: string) => SheetsConfig.SHEETS[key],
+        getSection: (key: string, id: string) =>
+          SheetsConfig.getSectionById(key, id),
+        columnToNumber: SheetsConfig.columnToNumber,
+        numberToColumn: SheetsConfig.numberToColumn,
+      };
+
+      // Calculate section positions with dynamic sizing
+      await SheetsConfig.calculateSectionPositions(config.grid, context);
+
       // Setup Configuration section
       const configSection = SheetsConfig.getSectionById(
         "dashboard",
@@ -606,17 +658,17 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Setup account balances using section configure method
-        await this.runSectionConfigure("dashboard", "account_balances");
+        // Setup account balances with full configuration
+        await SheetsConfig.configureAccountBalancesComplete(context);
       }
 
-      // Setup Monthly Expenses section using section configure method
-      await this.runSectionConfigure("dashboard", "monthly_expenses");
+      // Setup Monthly Expenses section with full configuration
+      await SheetsConfig.configureMonthlyExpensesComplete(context);
 
       // Create expense comparison pie chart
       await this.createExpenseComparisonPieChart();
 
-      // Apply beautiful formatting
+      // Apply beautiful formatting with preserved dynamic sizing
       await this.formatSheet("dashboard");
 
       console.log("Dashboard sheet setup completed successfully");
@@ -928,7 +980,7 @@ export class GoogleSheetsAdapter {
         return new Date().getFullYear();
       }
 
-      SheetsConfig.calculateSectionPositions(config.grid);
+      await SheetsConfig.calculateSectionPositions(config.grid);
       const configSection = SheetsConfig.getSectionById(
         "dashboard",
         "configuration"
@@ -1348,16 +1400,30 @@ export class GoogleSheetsAdapter {
       });
 
       const rows = response.data.values || [];
-      return rows
-        .filter((row: any[]) => row && row.length > 0 && row[1]) // Filter out empty rows and ensure ID exists
-        .map((row: any[]) => ({
-          number: parseInt(row[0]) || 0, // Number column
-          id: row[1] || "",
-          name: row[2] || "",
-          emoji: row[3] || "💳",
-          currency: (row[4] || "USD").toString().toUpperCase(),
-          description: row[5] || "",
-        }));
+
+      // Filter and deduplicate accounts based on ID
+      const uniqueAccountIds = new Set();
+      const filteredRows = rows.filter((row: any[]) => {
+        if (!row || row.length === 0 || !row[1]) return false; // Must have ID
+
+        const accountId = row[1].toString().trim();
+        if (uniqueAccountIds.has(accountId)) {
+          console.warn(`Duplicate account ID found: ${accountId}, skipping`);
+          return false; // Skip duplicates
+        }
+
+        uniqueAccountIds.add(accountId);
+        return true;
+      });
+
+      return filteredRows.map((row: any[]) => ({
+        number: parseInt(row[0]) || 0, // Number column
+        id: row[1] || "",
+        name: row[2] || "",
+        emoji: row[3] || "💳",
+        currency: (row[4] || "USD").toString().toUpperCase(),
+        description: row[5] || "",
+      }));
     } catch (error) {
       console.error("Error getting accounts from Google Sheets:", error);
       // Fallback to default accounts (only USD and EUR)
