@@ -28,7 +28,6 @@ export interface SectionMerging {
 export interface SheetSection {
   id: string; // unique identifier
   title: string;
-  emoji?: string;
   table: SectionTable;
   color: {
     title: { red: number; green: number; blue: number };
@@ -143,7 +142,6 @@ export class SheetsConfig {
             {
               id: "categories",
               title: "📂 CATEGORIES",
-              emoji: "📂",
               table: {
                 fields: [
                   { name: "#", type: "number", required: true },
@@ -217,7 +215,6 @@ export class SheetsConfig {
             {
               id: "accounts",
               title: "💳 ACCOUNTS",
-              emoji: "💳",
               table: {
                 fields: [
                   { name: "#", type: "number", required: true },
@@ -279,7 +276,6 @@ export class SheetsConfig {
             {
               id: "income_sources",
               title: "💰 INCOME SOURCES",
-              emoji: "💰",
               table: {
                 fields: [
                   { name: "#", type: "number", required: true },
@@ -345,7 +341,6 @@ export class SheetsConfig {
             {
               id: "configuration",
               title: "⚙️ CONFIGURATION",
-              emoji: "⚙️",
               table: {
                 fields: [
                   { name: "Setting", type: "string", required: true },
@@ -375,7 +370,6 @@ export class SheetsConfig {
             {
               id: "account_balances",
               title: "💰 ACCOUNT BALANCES",
-              emoji: "💰",
               table: {
                 fields: [
                   { name: "Account", type: "string", required: true },

@@ -54,7 +54,6 @@ interface SheetField {
 ```typescript
 interface SheetSection {
   title: string;        // Section title (e.g., "📂 CATEGORIES")
-  emoji: string;        // Section emoji
   startColumn: string;  // Starting column (e.g., "A")
   endColumn: string;    // Ending column (e.g., "D")
   fields: SheetField[]; // Fields in this section

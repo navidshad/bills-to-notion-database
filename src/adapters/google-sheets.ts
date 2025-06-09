@@ -614,6 +614,25 @@ export class GoogleSheetsAdapter {
     );
     if (!balanceSection || !balanceSection._calculated) return;
 
+    // Get the reference sheet configuration and calculate positions
+    const referenceConfig = SheetsConfig.SHEETS.reference;
+    if (!referenceConfig.grid) return;
+
+    SheetsConfig.calculateSectionPositions(referenceConfig.grid);
+
+    const accountsSection = SheetsConfig.getSectionById(
+      "reference",
+      "accounts"
+    );
+    if (!accountsSection || !accountsSection._calculated) return;
+
+    // Get the configuration section for the year value location
+    const configSection = SheetsConfig.getSectionById(
+      "dashboard",
+      "configuration"
+    );
+    if (!configSection || !configSection._calculated) return;
+
     try {
       const maxAccounts = SheetsConfig.LIMITS.MAX_ACCOUNTS;
       console.log(
@@ -629,6 +648,52 @@ export class GoogleSheetsAdapter {
         range: clearRange,
       });
 
+      // Calculate dynamic column addresses for the accounts section
+      const accountsStartCol = SheetsConfig.columnToNumber(
+        accountsSection._calculated.startColumn
+      );
+
+      // Field indices within the accounts section (based on field definitions)
+      const accountFields = accountsSection.table.fields;
+      const idFieldIndex = accountFields.findIndex(
+        (field) => field.name === "ID"
+      );
+      const nameFieldIndex = accountFields.findIndex(
+        (field) => field.name === "Name"
+      );
+      const emojiFieldIndex = accountFields.findIndex(
+        (field) => field.name === "Emoji"
+      );
+      const currencyFieldIndex = accountFields.findIndex(
+        (field) => field.name === "Currency"
+      );
+
+      // Calculate actual column letters
+      const idColumn = SheetsConfig.numberToColumn(
+        accountsStartCol + idFieldIndex
+      );
+      const nameColumn = SheetsConfig.numberToColumn(
+        accountsStartCol + nameFieldIndex
+      );
+      const emojiColumn = SheetsConfig.numberToColumn(
+        accountsStartCol + emojiFieldIndex
+      );
+      const currencyColumn = SheetsConfig.numberToColumn(
+        accountsStartCol + currencyFieldIndex
+      );
+
+      // Calculate the year value cell location in the configuration section
+      const configStartCol = SheetsConfig.columnToNumber(
+        configSection._calculated.startColumn
+      );
+      const valueFieldIndex = configSection.table.fields.findIndex(
+        (field) => field.name === "Value"
+      );
+      const yearValueColumn = SheetsConfig.numberToColumn(
+        configStartCol + valueFieldIndex
+      );
+      const yearValueRow = configSection._calculated.startRow + 2; // After title and headers, first data row
+
       // Define transaction types as constants (from keyboards/bill-keyboards.ts)
       const TRANSACTION_TYPES = {
         INCOME: "Income",
@@ -640,22 +705,22 @@ export class GoogleSheetsAdapter {
       const accountData = [];
       for (let i = 0; i < maxAccounts; i++) {
         const currentRow = dataStartRow + i; // Starting from calculated data start row
-        const referenceRow = 3 + i; // Reference sheet accounts start from row 3
+        const referenceRow = accountsSection._calculated.startRow + 2 + i; // Accounts section data start + offset
 
-        // Account name formula: =IF(Reference!I{referenceRow}<>"", Reference!J{referenceRow}&" "&Reference!I{referenceRow}, "")
-        const accountNameFormula = `=IF(Reference!I${referenceRow}<>"", Reference!J${referenceRow}&" "&Reference!I${referenceRow}, "")`;
+        // Account name formula using dynamic columns: =IF(Reference!{idColumn}{referenceRow}<>"", Reference!{emojiColumn}{referenceRow}&" "&Reference!{nameColumn}{referenceRow}, "")
+        const accountNameFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${emojiColumn}${referenceRow}&" "&Reference!${nameColumn}${referenceRow}, "")`;
 
-        // Currency formula: =IF(Reference!I{referenceRow}<>"", Reference!K{referenceRow}, "")
-        const currencyFormula = `=IF(Reference!I${referenceRow}<>"", Reference!K${referenceRow}, "")`;
+        // Currency formula using dynamic columns: =IF(Reference!{idColumn}{referenceRow}<>"", Reference!{currencyColumn}{referenceRow}, "")
+        const currencyFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${currencyColumn}${referenceRow}, "")`;
 
-        // Balance formula that uses the account name from the reference sheet
-        // We extract the account name from the Reference sheet directly, not from the current cell
-        const balanceFormula = `=IF(Reference!I${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&$I$3&"'!D:D"),INDIRECT("'Bills_"&$I$3&"'!H:H"),Reference!I${referenceRow},INDIRECT("'Bills_"&$I$3&"'!G:G"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&$I$3&"'!D:D"),INDIRECT("'Bills_"&$I$3&"'!H:H"),Reference!I${referenceRow},INDIRECT("'Bills_"&$I$3&"'!G:G"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&$I$3&"'!J:J"),INDIRECT("'Bills_"&$I$3&"'!I:I"),Reference!I${referenceRow},INDIRECT("'Bills_"&$I$3&"'!G:G"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
+        // Balance formula that uses the account ID from the reference sheet
+        // Using dynamic year value and dynamic account ID column
+        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!D:D"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!H:H"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!G:G"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!D:D"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!H:H"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!G:G"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!J:J"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!I:I"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!G:G"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
 
         accountData.push([
-          accountNameFormula, // Dynamic account name with emoji from Reference!J&I
-          currencyFormula, // Dynamic currency from Reference!K
-          balanceFormula, // Dynamic balance calculation using Reference!I (account name)
+          accountNameFormula, // Dynamic account name with emoji
+          currencyFormula, // Dynamic currency
+          balanceFormula, // Dynamic balance calculation
         ]);
       }
 
@@ -664,6 +729,10 @@ export class GoogleSheetsAdapter {
         const fullRange = `${sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${endRow}`;
 
         console.log(`Writing dynamic account formulas to range: ${fullRange}`);
+        console.log(
+          `Using Reference sheet columns: ID=${idColumn}, Name=${nameColumn}, Emoji=${emojiColumn}, Currency=${currencyColumn}`
+        );
+        console.log(`Using Year value from: ${yearValueColumn}${yearValueRow}`);
 
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
@@ -688,9 +757,38 @@ export class GoogleSheetsAdapter {
   async getSelectedYear(): Promise<number> {
     const sheetName = SheetsConfig.getSheetName("dashboard");
     try {
+      // Get the configuration section and calculate its position
+      const config = SheetsConfig.SHEETS.dashboard;
+      if (!config.grid) {
+        return new Date().getFullYear();
+      }
+
+      SheetsConfig.calculateSectionPositions(config.grid);
+      const configSection = SheetsConfig.getSectionById(
+        "dashboard",
+        "configuration"
+      );
+      if (!configSection || !configSection._calculated) {
+        return new Date().getFullYear();
+      }
+
+      // Calculate the dynamic address for the year value
+      const configStartCol = SheetsConfig.columnToNumber(
+        configSection._calculated.startColumn
+      );
+      const valueFieldIndex = configSection.table.fields.findIndex(
+        (field) => field.name === "Value"
+      );
+      const yearValueColumn = SheetsConfig.numberToColumn(
+        configStartCol + valueFieldIndex
+      );
+      const yearValueRow = configSection._calculated.startRow + 2; // After title and headers, first data row
+
+      const yearValueCell = `${yearValueColumn}${yearValueRow}`;
+
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!I3`, // Year value cell (moved from B3 to I3)
+        range: `${sheetName}!${yearValueCell}`,
       });
 
       const year = response.data.values?.[0]?.[0];
@@ -2290,63 +2388,6 @@ export class GoogleSheetsAdapter {
       return { success: true };
     } catch (error) {
       console.error(`Error copying bill #${billId} to TempBills:`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  /**
-   * Demo method to showcase the dashboard functionality
-   * This method demonstrates how to:
-   * 1. Initialize the dashboard
-   * 2. Set year configuration
-   * 3. Setup account formulas for real-time balance calculation
-   * 4. Get dashboard data
-   */
-  async dashboardDemo() {
-    try {
-      console.log("🚀 Starting Dashboard Demo...");
-
-      // 1. Initialize or update dashboard
-      await this.setupDashboard();
-      console.log("✅ Dashboard initialized");
-
-      // 2. Update dashboard with current data
-      await this.updateDashboard();
-      console.log("✅ Dashboard data refreshed");
-
-      // 3. Get current dashboard information
-      const selectedYear = await this.getSelectedYear();
-      const accounts = await this.getAccounts();
-
-      console.log(`📅 Selected Year: ${selectedYear}`);
-      console.log(`💳 Accounts Found: ${accounts.length}`);
-
-      // 4. Display account info (balances are now calculated by formulas in real-time)
-      for (const account of accounts) {
-        console.log(
-          `${account.emoji} ${account.name}: ${account.currency} (balance calculated by formula)`
-        );
-      }
-
-      return {
-        success: true,
-        message: "Dashboard demo completed successfully!",
-        dashboardUrl: `https://docs.google.com/spreadsheets/d/${this.spreadsheetId}/edit#gid=0`,
-        data: {
-          selectedYear,
-          accountCount: accounts.length,
-          accounts: accounts.map((acc: any) => ({
-            name: acc.name,
-            emoji: acc.emoji,
-            currency: acc.currency,
-          })),
-        },
-      };
-    } catch (error) {
-      console.error("❌ Dashboard demo failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
