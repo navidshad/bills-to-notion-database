@@ -30,6 +30,13 @@ export interface SheetConfiguration {
 }
 
 export class SheetsConfig {
+  // Configuration limits
+  static readonly LIMITS = {
+    MAX_ACCOUNTS: 10,
+    MAX_CATEGORIES: 25,
+    MAX_INCOME_SOURCES: 25,
+  };
+
   // Sheet configurations
   static readonly SHEETS: Record<string, SheetConfiguration> = {
     bills: {
@@ -92,8 +99,9 @@ export class SheetsConfig {
           title: "📂 CATEGORIES",
           emoji: "📂",
           startColumn: "A",
-          endColumn: "D",
+          endColumn: "E",
           fields: [
+            { name: "#", type: "number", required: true },
             { name: "ID", type: "string", required: true },
             { name: "Name", type: "string", required: true },
             { name: "Emoji", type: "string", default: "📋" },
@@ -108,9 +116,10 @@ export class SheetsConfig {
         {
           title: "💳 ACCOUNTS",
           emoji: "💳",
-          startColumn: "F",
-          endColumn: "J",
+          startColumn: "G",
+          endColumn: "L",
           fields: [
+            { name: "#", type: "number", required: true },
             { name: "ID", type: "string", required: true },
             { name: "Name", type: "string", required: true },
             { name: "Emoji", type: "string", default: "💳" },
@@ -131,9 +140,10 @@ export class SheetsConfig {
         {
           title: "💰 INCOME SOURCES",
           emoji: "💰",
-          startColumn: "L",
-          endColumn: "O",
+          startColumn: "N",
+          endColumn: "R",
           fields: [
+            { name: "#", type: "number", required: true },
             { name: "ID", type: "string", required: true },
             { name: "Name", type: "string", required: true },
             { name: "Emoji", type: "string", default: "💼" },
@@ -185,8 +195,8 @@ export class SheetsConfig {
         {
           title: "💰 ACCOUNT BALANCES",
           emoji: "💰",
-          startColumn: "G",
-          endColumn: "I",
+          startColumn: "A",
+          endColumn: "C",
           fields: [
             { name: "Account", type: "string", required: true },
             { name: "Currency", type: "currency", required: true },
@@ -205,32 +215,56 @@ export class SheetsConfig {
   // Default data for sheets
   static readonly DEFAULT_DATA = {
     categories: [
-      ["food", "Food", "🍕", "Restaurants, groceries, takeout"],
-      ["transport", "Transport", "🚗", "Gas, public transit, rideshare"],
-      ["shopping", "Shopping", "👕", "Clothes, electronics, general purchases"],
-      ["utilities", "Utilities", "💡", "Electricity, water, internet, phone"],
-      ["healthcare", "Healthcare", "🏥", "Medical bills, pharmacy, insurance"],
-      ["entertainment", "Entertainment", "🎬", "Movies, games, subscriptions"],
-      ["housing", "Housing", "🏠", "Rent, mortgage, maintenance"],
-      ["education", "Education", "📚", "Books, courses, tuition"],
-      ["other", "Other", "📋", "Miscellaneous expenses"],
+      [1, "food", "Food", "🍕", "Restaurants, groceries, takeout"],
+      [2, "transport", "Transport", "🚗", "Gas, public transit, rideshare"],
+      [
+        3,
+        "shopping",
+        "Shopping",
+        "👕",
+        "Clothes, electronics, general purchases",
+      ],
+      [
+        4,
+        "utilities",
+        "Utilities",
+        "💡",
+        "Electricity, water, internet, phone",
+      ],
+      [
+        5,
+        "healthcare",
+        "Healthcare",
+        "🏥",
+        "Medical bills, pharmacy, insurance",
+      ],
+      [
+        6,
+        "entertainment",
+        "Entertainment",
+        "🎬",
+        "Movies, games, subscriptions",
+      ],
+      [7, "housing", "Housing", "🏠", "Rent, mortgage, maintenance"],
+      [8, "education", "Education", "📚", "Books, courses, tuition"],
+      [9, "other", "Other", "📋", "Miscellaneous expenses"],
     ],
     accounts: [
-      ["main_card", "Main Card", "💳", "USD", "Primary debit/credit card"],
-      ["checking", "Checking", "🏦", "USD", "Main checking account"],
-      ["euro_card", "Euro Card", "💳", "EUR", "European debit/credit card"],
-      ["euro_cash", "Euro Cash", "💰", "EUR", "Physical euro cash"],
+      [1, "main_card", "Main Card", "💳", "USD", "Primary debit/credit card"],
+      [2, "checking", "Checking", "🏦", "USD", "Main checking account"],
+      [3, "euro_card", "Euro Card", "💳", "EUR", "European debit/credit card"],
+      [4, "euro_cash", "Euro Cash", "💰", "EUR", "Physical euro cash"],
     ],
     incomeSources: [
-      ["salary", "Salary", "💼", "Monthly salary income"],
-      ["freelance", "Freelance", "💻", "Freelance work income"],
-      ["bonus", "Bonus", "🎁", "Performance bonus"],
-      ["investment", "Investment", "📈", "Investment returns"],
-      ["rental", "Rental", "🏠", "Rental property income"],
-      ["business", "Business", "🏢", "Business income"],
-      ["gift", "Gift", "🎁", "Gift money received"],
-      ["refund", "Refund", "↩️", "Refund from purchase"],
-      ["other_income", "Other", "📋", "Other income sources"],
+      [1, "salary", "Salary", "💼", "Monthly salary income"],
+      [2, "freelance", "Freelance", "💻", "Freelance work income"],
+      [3, "bonus", "Bonus", "🎁", "Performance bonus"],
+      [4, "investment", "Investment", "📈", "Investment returns"],
+      [5, "rental", "Rental", "🏠", "Rental property income"],
+      [6, "business", "Business", "🏢", "Business income"],
+      [7, "gift", "Gift", "🎁", "Gift money received"],
+      [8, "refund", "Refund", "↩️", "Refund from purchase"],
+      [9, "other_income", "Other", "📋", "Other income sources"],
     ],
     config: [
       ["Setting", "Value", "Description"],

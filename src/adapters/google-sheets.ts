@@ -240,6 +240,12 @@ export class GoogleSheetsAdapter {
         "💰 INCOME SOURCES": SheetsConfig.DEFAULT_DATA.incomeSources,
       };
 
+      const sectionLimitsMap: Record<string, number> = {
+        "📂 CATEGORIES": SheetsConfig.LIMITS.MAX_CATEGORIES,
+        "💳 ACCOUNTS": SheetsConfig.LIMITS.MAX_ACCOUNTS,
+        "💰 INCOME SOURCES": SheetsConfig.LIMITS.MAX_INCOME_SOURCES,
+      };
+
       for (const section of config.sections) {
         const sectionData = sectionDataMap[section.title];
         if (sectionData) {
@@ -253,6 +259,31 @@ export class GoogleSheetsAdapter {
             valueInputOption: "RAW",
             requestBody: { values: sectionData },
           });
+
+          // Add limit label for all sections
+          const sectionLimit = sectionLimitsMap[section.title];
+          if (sectionLimit) {
+            const limitRow = endRow + 2; // Skip one row and add limit label
+            const limitRange = `${sheetName}!${section.startColumn}${limitRow}:${section.endColumn}${limitRow}`;
+            const limitText = `Max ${sectionLimit} ${section.title
+              .replace(/[📂💳💰]/g, "")
+              .trim()
+              .toLowerCase()} allowed`;
+
+            // Create appropriate number of empty columns before the limit text
+            const fieldCount = section.fields.length;
+            const limitValues = Array(fieldCount).fill("");
+            limitValues[2] = limitText; // Put limit text in the "Name" column (3rd column, index 2)
+
+            await this.sheets.spreadsheets.values.update({
+              spreadsheetId: this.spreadsheetId,
+              range: limitRange,
+              valueInputOption: "RAW",
+              requestBody: {
+                values: [limitValues],
+              },
+            });
+          }
         }
       }
     }
@@ -267,7 +298,7 @@ export class GoogleSheetsAdapter {
       const sheetId = await this.getSheetId(sheetName);
 
       const requests = [
-        // Categories section title formatting (A1:D1)
+        // Categories section title formatting (A1:E1)
         {
           repeatCell: {
             range: {
@@ -275,7 +306,7 @@ export class GoogleSheetsAdapter {
               startRowIndex: 0,
               endRowIndex: 1,
               startColumnIndex: 0,
-              endColumnIndex: 4,
+              endColumnIndex: 5,
             },
             cell: {
               userEnteredFormat: {
@@ -310,7 +341,7 @@ export class GoogleSheetsAdapter {
               "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
           },
         },
-        // Categories column headers formatting (A2:D2)
+        // Categories column headers formatting (A2:E2)
         {
           repeatCell: {
             range: {
@@ -318,7 +349,7 @@ export class GoogleSheetsAdapter {
               startRowIndex: 1,
               endRowIndex: 2,
               startColumnIndex: 0,
-              endColumnIndex: 4,
+              endColumnIndex: 5,
             },
             cell: {
               userEnteredFormat: {
@@ -354,15 +385,15 @@ export class GoogleSheetsAdapter {
               "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,borders)",
           },
         },
-        // Categories data border (A3:D25) - extended range for user additions
+        // Categories data border (A3:E34)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 2,
-              endRowIndex: 25,
+              endRowIndex: 34,
               startColumnIndex: 0,
-              endColumnIndex: 4,
+              endColumnIndex: 5,
             },
             cell: {
               userEnteredFormat: {
@@ -394,22 +425,56 @@ export class GoogleSheetsAdapter {
             fields: "userEnteredFormat(wrapStrategy,borders)",
           },
         },
-        // Divider column formatting (E1:E25)
+        // # Column width formatting - make all # columns narrower (A, G, N)
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId: sheetId,
+              dimension: "COLUMNS",
+              startIndex: 0, // Column A
+              endIndex: 1,
+            },
+            properties: { pixelSize: 50 },
+            fields: "pixelSize",
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId: sheetId,
+              dimension: "COLUMNS",
+              startIndex: 6, // Column G
+              endIndex: 7,
+            },
+            properties: { pixelSize: 50 },
+            fields: "pixelSize",
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId: sheetId,
+              dimension: "COLUMNS",
+              startIndex: 13, // Column N
+              endIndex: 14,
+            },
+            properties: { pixelSize: 50 },
+            fields: "pixelSize",
+          },
+        },
+        // Gap column F formatting
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 0,
-              endRowIndex: 25,
-              startColumnIndex: 4,
-              endColumnIndex: 5,
+              endRowIndex: 35,
+              startColumnIndex: 5,
+              endColumnIndex: 6,
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 }, // Light gray
-                textFormat: { bold: true, fontSize: 10 },
-                horizontalAlignment: "CENTER",
-                wrapStrategy: "CLIP",
+                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 },
                 borders: {
                   left: {
                     style: "SOLID",
@@ -424,19 +489,18 @@ export class GoogleSheetsAdapter {
                 },
               },
             },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy,borders)",
+            fields: "userEnteredFormat(backgroundColor,borders)",
           },
         },
-        // Accounts section title formatting (F1:J1)
+        // Accounts section title formatting (G1:L1)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 0,
               endRowIndex: 1,
-              startColumnIndex: 5,
-              endColumnIndex: 10,
+              startColumnIndex: 6,
+              endColumnIndex: 12,
             },
             cell: {
               userEnteredFormat: {
@@ -471,15 +535,15 @@ export class GoogleSheetsAdapter {
               "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
           },
         },
-        // Accounts column headers formatting (F2:J2)
+        // Accounts column headers formatting (G2:L2)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 1,
               endRowIndex: 2,
-              startColumnIndex: 5,
-              endColumnIndex: 10,
+              startColumnIndex: 6,
+              endColumnIndex: 12,
             },
             cell: {
               userEnteredFormat: {
@@ -515,15 +579,15 @@ export class GoogleSheetsAdapter {
               "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,borders)",
           },
         },
-        // Accounts data border (F3:J25) - extended range for user additions
+        // Accounts data border (G3:L18)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 2,
-              endRowIndex: 25,
-              startColumnIndex: 5,
-              endColumnIndex: 10,
+              endRowIndex: 18,
+              startColumnIndex: 6,
+              endColumnIndex: 12,
             },
             cell: {
               userEnteredFormat: {
@@ -555,22 +619,19 @@ export class GoogleSheetsAdapter {
             fields: "userEnteredFormat(wrapStrategy,borders)",
           },
         },
-        // Divider column formatting between Accounts and Income Sources (K1:K25)
+        // Gap column M formatting
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 0,
-              endRowIndex: 25,
-              startColumnIndex: 10,
-              endColumnIndex: 11,
+              endRowIndex: 35,
+              startColumnIndex: 12,
+              endColumnIndex: 13,
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 }, // Light gray
-                textFormat: { bold: true, fontSize: 10 },
-                horizontalAlignment: "CENTER",
-                wrapStrategy: "CLIP",
+                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 },
                 borders: {
                   left: {
                     style: "SOLID",
@@ -585,19 +646,18 @@ export class GoogleSheetsAdapter {
                 },
               },
             },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy,borders)",
+            fields: "userEnteredFormat(backgroundColor,borders)",
           },
         },
-        // Income Sources section title formatting (L1:O1)
+        // Income Sources section title formatting (N1:R1)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 0,
               endRowIndex: 1,
-              startColumnIndex: 11,
-              endColumnIndex: 15,
+              startColumnIndex: 13,
+              endColumnIndex: 18,
             },
             cell: {
               userEnteredFormat: {
@@ -632,15 +692,15 @@ export class GoogleSheetsAdapter {
               "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
           },
         },
-        // Income Sources column headers formatting (L2:O2)
+        // Income Sources column headers formatting (N2:R2)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 1,
               endRowIndex: 2,
-              startColumnIndex: 11,
-              endColumnIndex: 15,
+              startColumnIndex: 13,
+              endColumnIndex: 18,
             },
             cell: {
               userEnteredFormat: {
@@ -676,15 +736,15 @@ export class GoogleSheetsAdapter {
               "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,borders)",
           },
         },
-        // Income Sources data border (L3:O25) - extended range for user additions
+        // Income Sources data border (N3:R34)
         {
           repeatCell: {
             range: {
               sheetId: sheetId,
               startRowIndex: 2,
-              endRowIndex: 25,
-              startColumnIndex: 11,
-              endColumnIndex: 15,
+              endRowIndex: 34,
+              startColumnIndex: 13,
+              endColumnIndex: 18,
             },
             cell: {
               userEnteredFormat: {
@@ -697,7 +757,7 @@ export class GoogleSheetsAdapter {
                   },
                   right: {
                     style: "SOLID",
-                    width: 2,
+                    width: 3,
                     color: { red: 0.8, green: 0.5, blue: 0.2 },
                   },
                   top: {
@@ -719,16 +779,13 @@ export class GoogleSheetsAdapter {
       ];
 
       await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
+        spreadsheetId: spreadsheetId,
         requestBody: { requests },
       });
 
-      console.log(
-        "Successfully formatted Reference sheet with Categories (blue), Accounts (green), and Income Sources (orange) sections"
-      );
+      console.log("Reference sheet formatting applied successfully");
     } catch (error) {
-      console.error("Error formatting Reference sheet:", error);
-      // Don't throw error - formatting is optional
+      console.error("Error formatting reference sheet:", error);
     }
   }
 
@@ -745,55 +802,78 @@ export class GoogleSheetsAdapter {
     }
 
     try {
-      // Setup section titles
-      for (const section of config.sections) {
-        const titleRange = SheetsConfig.getSectionHeaderRange(section, 1);
+      // Setup Configuration section (rows 1-5)
+      const configSection = config.sections.find(
+        (s) => s.title === "⚙️ CONFIGURATION"
+      );
+      if (configSection) {
+        // Setup title
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!${titleRange}`,
+          range: `${sheetName}!${configSection.startColumn}1:${configSection.endColumn}1`,
           valueInputOption: "RAW",
           requestBody: {
-            values: [[section.title]],
+            values: [[configSection.title]],
           },
         });
-      }
 
-      // Setup column headers
-      for (const section of config.sections) {
-        const headerRange = SheetsConfig.getSectionHeaderRange(section, 2);
-        const headers = section.fields.map((field) => field.name);
+        // Setup headers
+        const headers = configSection.fields.map((field) => field.name);
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!${headerRange}`,
+          range: `${sheetName}!${configSection.startColumn}2:${configSection.endColumn}2`,
           valueInputOption: "RAW",
           requestBody: {
             values: [headers],
           },
         });
+
+        // Setup configuration data
+        if (SheetsConfig.DEFAULT_DATA.dashboard?.configuration) {
+          const endRow =
+            3 + SheetsConfig.DEFAULT_DATA.dashboard.configuration.length - 1;
+          const fullRange = `${sheetName}!${configSection.startColumn}3:${configSection.endColumn}${endRow}`;
+
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: fullRange,
+            valueInputOption: "RAW",
+            requestBody: {
+              values: SheetsConfig.DEFAULT_DATA.dashboard.configuration,
+            },
+          });
+        }
       }
 
-      // Setup configuration data (only Year now)
-      const configSection = config.sections.find(
-        (s) => s.title === "⚙️ CONFIGURATION"
+      // Setup Account Balances section (starting from row 7)
+      const balanceSection = config.sections.find(
+        (s) => s.title === "💰 ACCOUNT BALANCES"
       );
-      if (configSection && SheetsConfig.DEFAULT_DATA.dashboard?.configuration) {
-        const configRange = SheetsConfig.getSectionDataRange(configSection, 3);
-        const endRow =
-          3 + SheetsConfig.DEFAULT_DATA.dashboard.configuration.length - 1;
-        const fullRange = `${sheetName}!${configSection.startColumn}3:${configSection.endColumn}${endRow}`;
-
+      if (balanceSection) {
+        // Setup title
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: fullRange,
+          range: `${sheetName}!${balanceSection.startColumn}7:${balanceSection.endColumn}7`,
           valueInputOption: "RAW",
           requestBody: {
-            values: SheetsConfig.DEFAULT_DATA.dashboard.configuration,
+            values: [[balanceSection.title]],
           },
         });
-      }
 
-      // Setup account balances with formulas for real-time calculation
-      await this.setupAccountBalancesWithFormulas();
+        // Setup headers
+        const headers = balanceSection.fields.map((field) => field.name);
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${balanceSection.startColumn}8:${balanceSection.endColumn}8`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [headers],
+          },
+        });
+
+        // Setup account balances with formulas for real-time calculation
+        await this.setupAccountBalancesWithFormulas();
+      }
 
       // Apply beautiful formatting
       await this.formatDashboardSheet(this.spreadsheetId, sheetName);
@@ -817,37 +897,52 @@ export class GoogleSheetsAdapter {
     if (!balanceSection) return;
 
     try {
-      // Get all accounts from reference sheet
+      // Get all accounts from reference sheet up to the limit
       const allAccounts = await this.getAccounts();
-      console.log(`Setting up formulas for ${allAccounts.length} accounts`);
+      const maxAccounts = SheetsConfig.LIMITS.MAX_ACCOUNTS;
+      const accountsToProcess = allAccounts.slice(0, maxAccounts);
+      console.log(
+        `Setting up formulas for ${accountsToProcess.length} accounts (max ${maxAccounts})`
+      );
 
-      // Clear existing data first (clear up to 10 rows to be safe)
-      const clearRange = `${sheetName}!${balanceSection.startColumn}3:${balanceSection.endColumn}12`;
+      // Clear existing data first (clear all account rows)
+      const clearEndRow = 9 + maxAccounts - 1;
+      const clearRange = `${sheetName}!${balanceSection.startColumn}9:${balanceSection.endColumn}${clearEndRow}`;
       await this.sheets.spreadsheets.values.clear({
         spreadsheetId: this.spreadsheetId,
         range: clearRange,
       });
 
+      // Define transaction types as constants (from keyboards/bill-keyboards.ts)
+      const TRANSACTION_TYPES = {
+        INCOME: "Income",
+        EXPENSE: "Expense",
+        TRANSFER: "Transfer",
+      };
+
       // Setup account data with formulas for real-time balance calculation
       const accountData = [];
-      for (let i = 0; i < allAccounts.length && i < 8; i++) {
-        const account = allAccounts[i];
-        const rowNum = 3 + i; // Starting from row 3
+      for (let i = 0; i < accountsToProcess.length; i++) {
+        const account = accountsToProcess[i];
+        const currentRow = 9 + i; // Starting from row 9 (after title and headers at rows 7-8)
 
         // Create formula to calculate balance from Bills sheet dynamically
-        // Formula will reference the year from configuration cell B3
-        const balanceFormula = `=SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),"${account.name}",INDIRECT("'Bills_"&$B$3&"'!G:G"),"Income")-SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),"${account.name}",INDIRECT("'Bills_"&$B$3&"'!G:G"),"Expense")+SUMIFS(INDIRECT("'Bills_"&$B$3&"'!J:J"),INDIRECT("'Bills_"&$B$3&"'!I:I"),"${account.name}",INDIRECT("'Bills_"&$B$3&"'!G:G"),"Transfer")`;
+        // Formula references:
+        // - Year from configuration cell B3
+        // - Account name extracted from current row (A9, A10, etc.) by removing emoji
+        // - Transaction types from constants
+        const balanceFormula = `=SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),TRIM(MID(A${currentRow},FIND(" ",A${currentRow})+1,LEN(A${currentRow}))),INDIRECT("'Bills_"&$B$3&"'!G:G"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),TRIM(MID(A${currentRow},FIND(" ",A${currentRow})+1,LEN(A${currentRow}))),INDIRECT("'Bills_"&$B$3&"'!G:G"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&$B$3&"'!J:J"),INDIRECT("'Bills_"&$B$3&"'!I:I"),TRIM(MID(A${currentRow},FIND(" ",A${currentRow})+1,LEN(A${currentRow}))),INDIRECT("'Bills_"&$B$3&"'!G:G"),"${TRANSACTION_TYPES.TRANSFER}")`;
 
         accountData.push([
-          `${account.emoji} ${account.name}`,
+          `${account.emoji} ${account.name}`, // Display name with emoji
           account.currency,
           balanceFormula,
         ]);
       }
 
       if (accountData.length > 0) {
-        const endRow = 3 + accountData.length - 1;
-        const fullRange = `${sheetName}!${balanceSection.startColumn}3:${balanceSection.endColumn}${endRow}`;
+        const endRow = 9 + accountData.length - 1;
+        const fullRange = `${sheetName}!${balanceSection.startColumn}9:${balanceSection.endColumn}${endRow}`;
 
         console.log(
           `Writing account data with formulas to range: ${fullRange}`
@@ -867,7 +962,7 @@ export class GoogleSheetsAdapter {
         console.log("No accounts found to process");
       }
     } catch (error) {
-      console.error("Error refreshing account balances:", error);
+      console.error("Error setting up account balances with formulas:", error);
     }
   }
 
@@ -1347,16 +1442,41 @@ export class GoogleSheetsAdapter {
       });
 
       const rows = response.data.values || [];
-      return rows.map((row: any[]) => ({
-        id: row[0] || "",
-        name: row[1] || "",
-        emoji: row[2] || "📋",
-        description: row[3] || "",
-      }));
+      return rows
+        .filter((row: any[]) => row && row.length > 0 && row[1]) // Filter out empty rows and ensure ID exists
+        .map((row: any[]) => ({
+          number: parseInt(row[0]) || 0, // Number column
+          id: row[1] || "",
+          name: row[2] || "",
+          emoji: row[3] || "📋",
+          description: row[4] || "",
+        }));
     } catch (error) {
       console.error("Error getting categories from Google Sheets:", error);
       // Fallback to default categories
-      return [];
+      return [
+        {
+          number: 1,
+          id: "food",
+          name: "Food",
+          emoji: "🍕",
+          description: "Restaurants, groceries, takeout",
+        },
+        {
+          number: 2,
+          id: "transport",
+          name: "Transport",
+          emoji: "🚗",
+          description: "Gas, public transit, rideshare",
+        },
+        {
+          number: 3,
+          id: "other",
+          name: "Other",
+          emoji: "📋",
+          description: "Miscellaneous expenses",
+        },
+      ];
     }
   }
 
@@ -1378,13 +1498,16 @@ export class GoogleSheetsAdapter {
       });
 
       const rows = response.data.values || [];
-      return rows.map((row: any[]) => ({
-        id: row[0] || "",
-        name: row[1] || "",
-        emoji: row[2] || "💳",
-        currency: (row[3] || "USD").toString().toUpperCase(),
-        description: row[4] || "",
-      }));
+      return rows
+        .filter((row: any[]) => row && row.length > 0 && row[1]) // Filter out empty rows and ensure ID exists
+        .map((row: any[]) => ({
+          number: parseInt(row[0]) || 0, // Number column
+          id: row[1] || "",
+          name: row[2] || "",
+          emoji: row[3] || "💳",
+          currency: (row[4] || "USD").toString().toUpperCase(),
+          description: row[5] || "",
+        }));
     } catch (error) {
       console.error("Error getting accounts from Google Sheets:", error);
       // Fallback to default accounts (only USD and EUR)
@@ -1410,23 +1533,28 @@ export class GoogleSheetsAdapter {
       });
 
       const rows = response.data.values || [];
-      return rows.map((row: any[]) => ({
-        id: row[0] || "",
-        name: row[1] || "",
-        emoji: row[2] || "💼",
-        description: row[3] || "",
-      }));
+      return rows
+        .filter((row: any[]) => row && row.length > 0 && row[1]) // Filter out empty rows and ensure ID exists
+        .map((row: any[]) => ({
+          number: parseInt(row[0]) || 0, // Number column
+          id: row[1] || "",
+          name: row[2] || "",
+          emoji: row[3] || "💼",
+          description: row[4] || "",
+        }));
     } catch (error) {
       console.error("Error getting income sources from Google Sheets:", error);
       // Fallback to default income sources
       return [
         {
+          number: 1,
           id: "salary",
           name: "Salary",
           emoji: "💼",
           description: "Monthly salary income",
         },
         {
+          number: 2,
           id: "other_income",
           name: "Other",
           emoji: "📋",
@@ -1563,29 +1691,46 @@ export class GoogleSheetsAdapter {
       // Normalize currency to uppercase
       const normalizedCurrency = currency.toUpperCase();
 
-      // Get current accounts to find the next available row in accounts section (F3:J)
+      // Get current accounts to find the next available row in accounts section (G3:L)
       const currentData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: "Reference!F3:J",
+        range: "Reference!G3:L",
       });
 
       const rows = currentData.data.values || [];
-      const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
 
-      // Append the new account to accounts section (starting at column F)
+      // Check if we've reached the limit
+      if (rows.length >= SheetsConfig.LIMITS.MAX_ACCOUNTS) {
+        throw new Error(
+          `Maximum number of accounts (${SheetsConfig.LIMITS.MAX_ACCOUNTS}) reached`
+        );
+      }
+
+      const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
+      const accountNumber = rows.length + 1; // Next number in sequence
+
+      // Append the new account to accounts section (starting at column G)
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Reference!F${nextRow}:J${nextRow}`,
+        range: `Reference!G${nextRow}:L${nextRow}`,
         valueInputOption: "RAW",
         requestBody: {
-          values: [[id, name, emoji, normalizedCurrency, description]],
+          values: [
+            [accountNumber, id, name, emoji, normalizedCurrency, description],
+          ],
         },
       });
 
       console.log(
-        `Successfully created account: ${name} (${normalizedCurrency})`
+        `Successfully created account #${accountNumber}: ${name} (${normalizedCurrency})`
       );
-      return { success: true, id, name, currency: normalizedCurrency };
+      return {
+        success: true,
+        id,
+        name,
+        currency: normalizedCurrency,
+        number: accountNumber,
+      };
     } catch (error) {
       console.error("Error creating account:", error);
       throw error;
@@ -1607,27 +1752,36 @@ export class GoogleSheetsAdapter {
         throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
       }
 
-      // Get current categories to find the next available row in categories section (A3:D)
+      // Get current categories to find the next available row in categories section (A3:E)
       const currentData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: "Reference!A3:D",
+        range: "Reference!A3:E",
       });
 
       const rows = currentData.data.values || [];
+
+      // Check if we've reached the limit
+      if (rows.length >= SheetsConfig.LIMITS.MAX_CATEGORIES) {
+        throw new Error(
+          `Maximum number of categories (${SheetsConfig.LIMITS.MAX_CATEGORIES}) reached`
+        );
+      }
+
       const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
+      const categoryNumber = rows.length + 1; // Next number in sequence
 
       // Append the new category to categories section (starting at column A)
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Reference!A${nextRow}:D${nextRow}`,
+        range: `Reference!A${nextRow}:E${nextRow}`,
         valueInputOption: "RAW",
         requestBody: {
-          values: [[id, name, emoji, description]],
+          values: [[categoryNumber, id, name, emoji, description]],
         },
       });
 
-      console.log(`Successfully created category: ${name}`);
-      return { success: true, id, name };
+      console.log(`Successfully created category #${categoryNumber}: ${name}`);
+      return { success: true, id, name, number: categoryNumber };
     } catch (error) {
       console.error("Error creating category:", error);
       throw error;
