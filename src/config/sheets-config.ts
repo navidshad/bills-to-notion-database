@@ -421,7 +421,7 @@ export class SheetsConfig {
                   [
                     "Month",
                     (new Date().getMonth() + 1).toString(),
-                    "Selected month for analysis (1-12)",
+                    "Select month for analysis",
                   ],
                   ["", "", ""], // Spacer row
                   ["Category", "Amount", "Percentage"], // Expenses header
@@ -1134,6 +1134,97 @@ export class SheetsConfig {
             values: expensesSection.table.defaultData,
           },
         });
+
+        // 3.1. Add month dropdown validation to the month value cell
+        try {
+          // Get sheet ID for data validation
+          const sheetsResponse = await context.sheetsApi.spreadsheets.get({
+            spreadsheetId: context.spreadsheetId,
+          });
+          const sheet = sheetsResponse.data.sheets.find(
+            (s: any) => s.properties.title === context.sheetName
+          );
+          if (!sheet) {
+            throw new Error(`Sheet "${context.sheetName}" not found`);
+          }
+          const sheetId = sheet.properties.sheetId;
+
+          // Calculate month value cell position
+          const monthValueFieldIndex = expensesSection.table.fields.findIndex(
+            (field) => field.name === "Value"
+          );
+          const monthValueCol =
+            context.columnToNumber(
+              context.numberToColumn(
+                context.columnToNumber(
+                  expensesSection._calculated.startColumn
+                ) + monthValueFieldIndex
+              )
+            ) - 1; // Convert to 0-based index
+          const monthValueRowIndex = defaultDataStartRow - 1; // Convert to 0-based index
+
+          // Create dropdown with just month numbers for simpler formula compatibility
+          const monthDropdownRequest = {
+            setDataValidation: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: monthValueRowIndex,
+                endRowIndex: monthValueRowIndex + 1,
+                startColumnIndex: monthValueCol,
+                endColumnIndex: monthValueCol + 1,
+              },
+              rule: {
+                condition: {
+                  type: "ONE_OF_LIST",
+                  values: [
+                    { userEnteredValue: "1" },
+                    { userEnteredValue: "2" },
+                    { userEnteredValue: "3" },
+                    { userEnteredValue: "4" },
+                    { userEnteredValue: "5" },
+                    { userEnteredValue: "6" },
+                    { userEnteredValue: "7" },
+                    { userEnteredValue: "8" },
+                    { userEnteredValue: "9" },
+                    { userEnteredValue: "10" },
+                    { userEnteredValue: "11" },
+                    { userEnteredValue: "12" },
+                  ],
+                },
+                showCustomUi: true,
+                strict: true,
+                inputMessage: "Select a month (1-12)",
+              },
+            },
+          };
+
+          await context.sheetsApi.spreadsheets.batchUpdate({
+            spreadsheetId: context.spreadsheetId,
+            requestBody: {
+              requests: [monthDropdownRequest],
+            },
+          });
+
+          // Set the default month value to current month (numeric)
+          const currentMonth = new Date().getMonth() + 1;
+
+          const monthCellRange = `${context.sheetName}!${context.numberToColumn(
+            monthValueCol + 1
+          )}${defaultDataStartRow}`;
+          await context.sheetsApi.spreadsheets.values.update({
+            spreadsheetId: context.spreadsheetId,
+            range: monthCellRange,
+            valueInputOption: "RAW",
+            requestBody: {
+              values: [[currentMonth.toString()]],
+            },
+          });
+
+          console.log("Month dropdown validation added successfully");
+        } catch (error) {
+          console.error("Error adding month dropdown validation:", error);
+          // Don't throw - continue with setup even if dropdown validation fails
+        }
       }
 
       // 4. Calculate dynamic column addresses for the categories section
@@ -1223,10 +1314,10 @@ export class SheetsConfig {
         // Category name formula (with emoji)
         const categoryNameFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", Reference!${categoryEmojiColumn}${categoryReferenceRow}&" "&Reference!${categoryNameColumn}${categoryReferenceRow}, "")`;
 
-        // Monthly expense amount formula using month from within the section
+        // Monthly expense amount formula using direct month number (now that dropdown stores numbers)
         const amountFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsCategoryColumn}:${billsCategoryColumn}"), Reference!${categoryNameColumn}${categoryReferenceRow}, INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "Expense", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1), "")`;
 
-        // Calculate total monthly expenses (using month from within the section)
+        // Calculate total monthly expenses (using direct month number)
         const totalExpensesFormula = `SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "Expense", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1)`;
 
         // Percentage formula - reference the amount column (second column in the section)
