@@ -23,16 +23,16 @@ function registerInitCommand(bot: any) {
 
       const sheetsCreatedText =
         result.sheetsCreated.length > 0
-          ? `\n**Sheets Created:** ${result.sheetsCreated.join(", ")}`
-          : "\n**All required sheets already exist**";
+          ? `\n*Sheets Created:* ${result.sheetsCreated.join(", ")}`
+          : "\n*All required sheets already exist*";
 
       const setupMessage = `✅ Successfully initialized your personal finance tracker!
 
-📋 **Your Spreadsheet ID:** \`${result.spreadsheetId}\`
+📋 *Your Spreadsheet ID:* \`${result.spreadsheetId}\`
 
-🔗 **Spreadsheet URL:** ${result.url}${sheetsCreatedText}
+🔗 *Spreadsheet URL:* ${result.url}${sheetsCreatedText}
 
-**Required Sheets:**
+*Required Sheets:*
 ✅ Bills_${new Date().getFullYear()} - Your transactions for this year
 ✅ Reference - Categories, accounts, and income sources with visual separation
 ✅ Config - System configuration
