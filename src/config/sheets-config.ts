@@ -404,6 +404,43 @@ export class SheetsConfig {
               },
             },
           ],
+          [
+            // Third row: Monthly Expenses by Category section
+            {
+              id: "monthly_expenses",
+              title: "📊 MONTHLY EXPENSES BY CATEGORY",
+              table: {
+                fields: [
+                  { name: "Setting", type: "string", required: true },
+                  { name: "Value", type: "string", required: true },
+                  { name: "Description", type: "string" },
+                ],
+                maxRows: this.LIMITS.MAX_CATEGORIES + 2, // categories + month selector + header spacer
+                hasHeaders: true,
+                defaultData: [
+                  [
+                    "Month",
+                    (new Date().getMonth() + 1).toString(),
+                    "Selected month for analysis (1-12)",
+                  ],
+                  ["", "", ""], // Spacer row
+                  ["Category", "Amount", "Percentage"], // Expenses header
+                ],
+              },
+              color: {
+                title: { red: 1, green: 0.9, blue: 0.7 },
+                header: { red: 1, green: 0.95, blue: 0.85 },
+                border: { red: 0.8, green: 0.5, blue: 0.2 },
+              },
+              spacing: {
+                top: 1, // Add some spacing above this section
+              },
+              configure: async (context: SectionConfigureContext) => {
+                // Monthly Expenses configuration logic
+                await SheetsConfig.configureMonthlyExpenses(context);
+              },
+            },
+          ],
         ],
         gridSettings: {
           defaultSectionWidth: 3, // 3 columns per section by default
@@ -1009,6 +1046,224 @@ export class SheetsConfig {
       }
     } catch (error) {
       console.error("Error setting up account balances with formulas:", error);
+    }
+  }
+
+  /**
+   * Configure Monthly Expenses section with dynamic formulas
+   */
+  static async configureMonthlyExpenses(
+    context: SectionConfigureContext
+  ): Promise<void> {
+    const expensesSection = context.getSection("dashboard", "monthly_expenses");
+    if (!expensesSection || !expensesSection._calculated) {
+      console.warn("Monthly expenses section not found or not calculated");
+      return;
+    }
+
+    // Get the configuration section for year value
+    const configSection = context.getSection("dashboard", "configuration");
+    if (!configSection || !configSection._calculated) {
+      console.warn("Configuration section not found or not calculated");
+      return;
+    }
+
+    // Get the reference sheet configuration and calculate positions
+    const referenceConfig = context.getSheetConfig("reference");
+    if (!referenceConfig?.grid) {
+      console.warn("Reference sheet configuration not found");
+      return;
+    }
+
+    // Calculate positions for reference sheet if not already done
+    this.calculateSectionPositions(referenceConfig.grid);
+
+    const categoriesSection = context.getSection("reference", "categories");
+    if (!categoriesSection || !categoriesSection._calculated) {
+      console.warn("Categories section not found in reference sheet");
+      return;
+    }
+
+    try {
+      const maxCategories = context.limits.MAX_CATEGORIES;
+      console.log(
+        `Setting up monthly expenses section with embedded month selector for up to ${maxCategories} categories`
+      );
+
+      // 1. Setup section title
+      const titleRange = this.getSectionHeaderRange(
+        expensesSection,
+        expensesSection._calculated.startRow
+      );
+      await context.sheetsApi.spreadsheets.values.update({
+        spreadsheetId: context.spreadsheetId,
+        range: `${context.sheetName}!${titleRange}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[expensesSection.title]],
+        },
+      });
+
+      // 2. Setup section headers
+      const headers = expensesSection.table.fields.map((field) => field.name);
+      const headerRange = this.getSectionHeaderRange(
+        expensesSection,
+        expensesSection._calculated.startRow + 1
+      );
+      await context.sheetsApi.spreadsheets.values.update({
+        spreadsheetId: context.spreadsheetId,
+        range: `${context.sheetName}!${headerRange}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [headers],
+        },
+      });
+
+      // 3. Setup default data (month selector + spacer + expenses header)
+      if (expensesSection.table.defaultData) {
+        const defaultDataStartRow = expensesSection._calculated.startRow + 2; // After section title and main headers
+        const defaultDataEndRow =
+          defaultDataStartRow + expensesSection.table.defaultData.length - 1;
+        const defaultDataRange = `${context.sheetName}!${expensesSection._calculated.startColumn}${defaultDataStartRow}:${expensesSection._calculated.endColumn}${defaultDataEndRow}`;
+
+        await context.sheetsApi.spreadsheets.values.update({
+          spreadsheetId: context.spreadsheetId,
+          range: defaultDataRange,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: expensesSection.table.defaultData,
+          },
+        });
+      }
+
+      // 4. Calculate dynamic column addresses for the categories section
+      const categoriesStartCol = context.columnToNumber(
+        categoriesSection._calculated.startColumn
+      );
+
+      // Field indices within the categories section
+      const categoryFields = categoriesSection.table.fields;
+      const nameFieldIndex = categoryFields.findIndex(
+        (field) => field.name === "Name"
+      );
+      const emojiFieldIndex = categoryFields.findIndex(
+        (field) => field.name === "Emoji"
+      );
+
+      // Calculate actual column letters for categories
+      const categoryNameColumn = context.numberToColumn(
+        categoriesStartCol + nameFieldIndex
+      );
+      const categoryEmojiColumn = context.numberToColumn(
+        categoriesStartCol + emojiFieldIndex
+      );
+
+      // 5. Calculate configuration value locations (year from config section)
+      const configStartCol = context.columnToNumber(
+        configSection._calculated.startColumn
+      );
+      const configValueFieldIndex = configSection.table.fields.findIndex(
+        (field) => field.name === "Value"
+      );
+      const configValueColumn = context.numberToColumn(
+        configStartCol + configValueFieldIndex
+      );
+      const yearValueRow = configSection._calculated.startRow + 2; // Year value location
+
+      // 6. Calculate month value location (within monthly expenses section)
+      const expensesValueFieldIndex = expensesSection.table.fields.findIndex(
+        (field) => field.name === "Value"
+      );
+      const expensesValueColumn = context.numberToColumn(
+        context.columnToNumber(expensesSection._calculated.startColumn) +
+          expensesValueFieldIndex
+      );
+      const monthValueRow = expensesSection._calculated.startRow + 2; // Month value in first data row
+
+      // 7. Get bills sheet field configuration
+      const billsConfig = context.getSheetConfig("bills");
+      if (!billsConfig?.fields) {
+        throw new Error("Bills sheet configuration not found");
+      }
+
+      // Find field indices in bills sheet
+      const billsFields = billsConfig.fields;
+      const amountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Amount"
+      );
+      const categoryFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Category"
+      );
+      const transactionTypeFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Transaction Type"
+      );
+      const dateFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Date"
+      );
+
+      // Convert to column letters for bills sheet
+      const billsAmountColumn = context.numberToColumn(amountFieldIndex + 1);
+      const billsCategoryColumn = context.numberToColumn(
+        categoryFieldIndex + 1
+      );
+      const billsTransactionTypeColumn = context.numberToColumn(
+        transactionTypeFieldIndex + 1
+      );
+      const billsDateColumn = context.numberToColumn(dateFieldIndex + 1);
+
+      // 8. Setup expense data with formulas (starting after month selector + spacer + header)
+      const expenseDataStartRow = expensesSection._calculated.startRow + 5; // After title, headers, month, spacer, expenses header
+      const expenseData = [];
+
+      for (let i = 0; i < maxCategories; i++) {
+        const currentRow = expenseDataStartRow + i;
+        const categoryReferenceRow =
+          categoriesSection._calculated.startRow + 2 + i;
+
+        // Category name formula (with emoji)
+        const categoryNameFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", Reference!${categoryEmojiColumn}${categoryReferenceRow}&" "&Reference!${categoryNameColumn}${categoryReferenceRow}, "")`;
+
+        // Monthly expense amount formula using month from within the section
+        const amountFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsCategoryColumn}:${billsCategoryColumn}"), Reference!${categoryNameColumn}${categoryReferenceRow}, INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "Expense", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1), "")`;
+
+        // Calculate total monthly expenses (using month from within the section)
+        const totalExpensesFormula = `SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "Expense", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1)`;
+
+        // Percentage formula - reference the amount column (second column in the section)
+        const amountColumnInSection = context.numberToColumn(
+          context.columnToNumber(expensesSection._calculated.startColumn) + 1
+        );
+        const percentageFormula = `=IF(AND(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", ${amountColumnInSection}${currentRow}<>"", ${totalExpensesFormula}>0), ROUND((${amountColumnInSection}${currentRow}/(${totalExpensesFormula}))*100, 1)&"%", "")`;
+
+        expenseData.push([
+          categoryNameFormula,
+          amountFormula,
+          percentageFormula,
+        ]);
+      }
+
+      // 9. Write expense formulas to sheet
+      if (expenseData.length > 0) {
+        const endRow = expenseDataStartRow + expenseData.length - 1;
+        const fullRange = `${context.sheetName}!${expensesSection._calculated.startColumn}${expenseDataStartRow}:${expensesSection._calculated.endColumn}${endRow}`;
+
+        console.log(`Writing monthly expenses formulas to range: ${fullRange}`);
+
+        await context.sheetsApi.spreadsheets.values.update({
+          spreadsheetId: context.spreadsheetId,
+          range: fullRange,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: expenseData,
+          },
+        });
+
+        console.log(
+          "Monthly expenses section fully configured with embedded month selector and dynamic formulas"
+        );
+      }
+    } catch (error) {
+      console.error("Error setting up monthly expenses with formulas:", error);
     }
   }
 

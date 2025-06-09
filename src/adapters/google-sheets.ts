@@ -566,6 +566,9 @@ export class GoogleSheetsAdapter {
         await this.runSectionConfigure("dashboard", "account_balances");
       }
 
+      // Setup Monthly Expenses section using section configure method
+      await this.runSectionConfigure("dashboard", "monthly_expenses");
+
       // Create expense comparison pie chart
       await this.createExpenseComparisonPieChart();
 
@@ -1219,6 +1222,9 @@ export class GoogleSheetsAdapter {
       // With formula-based calculations, the dashboard updates automatically
       // We can just re-setup the account balances using section configure method
       await this.runSectionConfigure("dashboard", "account_balances");
+
+      // Re-setup monthly expenses using section configure method
+      await this.runSectionConfigure("dashboard", "monthly_expenses");
 
       // Recreate expense comparison pie chart with updated data
       await this.createExpenseComparisonPieChart();
