@@ -694,6 +694,43 @@ export class GoogleSheetsAdapter {
       );
       const yearValueRow = configSection._calculated.startRow + 2; // After title and headers, first data row
 
+      // Get bills sheet field configuration for dynamic column references
+      const billsConfig = SheetsConfig.SHEETS.bills;
+      if (!billsConfig.fields) {
+        throw new Error("Bills sheet configuration not found");
+      }
+
+      // Find field indices in bills sheet
+      const billsFields = billsConfig.fields;
+      const amountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Amount"
+      );
+      const accountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Account"
+      );
+      const transactionTypeFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Transaction Type"
+      );
+      const destinationAccountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Destination Account"
+      );
+      const destinationAmountFieldIndex = billsFields.findIndex(
+        (field) => field.name === "Destination Amount"
+      );
+
+      // Convert to column letters (A=1, B=2, etc.)
+      const amountColumn = SheetsConfig.numberToColumn(amountFieldIndex + 1);
+      const accountColumn = SheetsConfig.numberToColumn(accountFieldIndex + 1);
+      const transactionTypeColumn = SheetsConfig.numberToColumn(
+        transactionTypeFieldIndex + 1
+      );
+      const destinationAccountColumn = SheetsConfig.numberToColumn(
+        destinationAccountFieldIndex + 1
+      );
+      const destinationAmountColumn = SheetsConfig.numberToColumn(
+        destinationAmountFieldIndex + 1
+      );
+
       // Define transaction types as constants (from keyboards/bill-keyboards.ts)
       const TRANSACTION_TYPES = {
         INCOME: "Income",
@@ -713,9 +750,9 @@ export class GoogleSheetsAdapter {
         // Currency formula using dynamic columns: =IF(Reference!{idColumn}{referenceRow}<>"", Reference!{currencyColumn}{referenceRow}, "")
         const currencyFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${currencyColumn}${referenceRow}, "")`;
 
-        // Balance formula that uses the account ID from the reference sheet
-        // Using dynamic year value and dynamic account ID column
-        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!D:D"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!H:H"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!G:G"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!D:D"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!H:H"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!G:G"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!J:J"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!I:I"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!G:G"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
+        // Balance formula that uses the account ID from the reference sheet (bills sheet stores IDs, not names)
+        // Using dynamic year value and dynamic column references for bills sheet
+        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
 
         accountData.push([
           accountNameFormula, // Dynamic account name with emoji
@@ -733,6 +770,9 @@ export class GoogleSheetsAdapter {
           `Using Reference sheet columns: ID=${idColumn}, Name=${nameColumn}, Emoji=${emojiColumn}, Currency=${currencyColumn}`
         );
         console.log(`Using Year value from: ${yearValueColumn}${yearValueRow}`);
+        console.log(
+          `Using Bills sheet columns: Amount=${amountColumn}, Account=${accountColumn}, TransactionType=${transactionTypeColumn}, DestinationAccount=${destinationAccountColumn}, DestinationAmount=${destinationAmountColumn}`
+        );
 
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
@@ -1434,8 +1474,8 @@ export class GoogleSheetsAdapter {
   async getDefaultAccount(): Promise<string> {
     try {
       const accounts = await this.getAccounts();
-      // Return first account name or "none" if no accounts exist
-      return accounts.length > 0 ? accounts[0].name : "none";
+      // Return first account ID or "none" if no accounts exist
+      return accounts.length > 0 ? accounts[0].id : "none";
     } catch (error) {
       console.error("Error getting default account:", error);
       return "none";

@@ -362,7 +362,7 @@ export class SheetsConfig {
                 header: { red: 0.95, green: 0.9, blue: 1 },
                 border: { red: 0.5, green: 0.2, blue: 0.8 },
               },
-              merging: { colspan: 2 }, // spans across full width
+              spacing: { left: 8 },
             },
           ],
           [
@@ -384,8 +384,8 @@ export class SheetsConfig {
                 header: { red: 0.8, green: 0.98, blue: 0.8 },
                 border: { red: 0.1, green: 0.7, blue: 0.1 },
               },
-              merging: { colspan: 2 }, // spans across full width
-              spacing: { top: 2 }, // 2 empty rows above
+
+              spacing: { left: 8, top: 1 }, // 2 empty rows above
             },
           ],
         ],

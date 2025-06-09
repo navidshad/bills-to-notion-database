@@ -98,11 +98,11 @@ class DashboardTestDataPopulator {
     ];
 
     const accounts = [
-      { name: "Main Card", currency: "USD", weight: 0.4 },
-      { name: "Cash", currency: "USD", weight: 0.25 },
-      { name: "Business Card", currency: "USD", weight: 0.2 },
-      { name: "Euro Cash", currency: "EUR", weight: 0.1 },
-      { name: "Savings", currency: "USD", weight: 0.05 },
+      { id: "main_card", name: "Main Card", currency: "USD", weight: 0.4 },
+      { id: "checking", name: "Checking", currency: "USD", weight: 0.25 },
+      { id: "euro_card", name: "Euro Card", currency: "EUR", weight: 0.2 },
+      { id: "euro_cash", name: "Euro Cash", currency: "EUR", weight: 0.1 },
+      { id: "savings", name: "Savings", currency: "USD", weight: 0.05 },
     ];
 
     // Generate expenses for the calculated date range
@@ -136,7 +136,7 @@ class DashboardTestDataPopulator {
           currency: account.currency,
           category: category.name,
           transaction_type: "expense",
-          account: account.name,
+          account: account.id,
           payment_method: this.getRandomPaymentMethod(),
           tags: this.generateTags(category.name),
           notes: Math.random() > 0.7 ? this.generateNotes() : "",
@@ -169,7 +169,7 @@ class DashboardTestDataPopulator {
           currency: "USD",
           category: "Income",
           transaction_type: "income",
-          account: "Main Card",
+          account: "main_card",
           payment_method: "Bank Transfer",
           notes: `Regular ${income.title.toLowerCase()}`,
         });
@@ -179,32 +179,32 @@ class DashboardTestDataPopulator {
     // 3. TRANSFER TRANSACTIONS (20% of data)
     const transferScenarios = [
       {
-        from: "Main Card",
-        to: "Cash",
+        from: "main_card",
+        to: "checking",
         currency_from: "USD",
         currency_to: "USD",
         rate: 1.0,
       },
       {
-        from: "Main Card",
-        to: "Euro Cash",
+        from: "main_card",
+        to: "euro_cash",
         currency_from: "USD",
         currency_to: "EUR",
         rate: 0.85,
       },
       {
-        from: "Cash",
-        to: "Savings",
+        from: "checking",
+        to: "savings",
         currency_from: "USD",
         currency_to: "USD",
         rate: 1.0,
       },
       {
-        from: "Business Card",
-        to: "Main Card",
-        currency_from: "USD",
+        from: "euro_card",
+        to: "main_card",
+        currency_from: "EUR",
         currency_to: "USD",
-        rate: 1.0,
+        rate: 1.18,
       },
     ];
 
