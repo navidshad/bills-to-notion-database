@@ -17,6 +17,7 @@ function registerHelpCommand(bot: any) {
 • \`/init\` - Set up a new Google Sheets workbook for tracking
 • \`/add\` - Add new transaction (followed by photo or text)
 • \`/pending\` - List all pending transactions
+• \`/update\` - Update dashboard layout based on reference sheet changes
 • \`/help\` - Show this help message
 
 **How to use:**
@@ -47,6 +48,12 @@ category: Food
 • **💰 Income:** Track earnings with sources and accounts  
 • **🔄 Transfer:** Move money between accounts with rates/fees
 
+**Dashboard Management:**
+• Use \`/update\` after adding accounts/categories to the reference sheet
+• Completely clears and rebuilds dashboard from scratch
+• Automatically sizes sections perfectly for your current data
+• Recreates all formulas, charts, and formatting for optimal layout
+
 **Smart Features:**
 ✅ AI processing of receipts and text descriptions
 ✅ Template-based multi-field editing
@@ -54,6 +61,7 @@ category: Food
 ✅ Category, account, and income source management
 ✅ Yearly sheet organization (Bills_2024, Bills_2025, etc.)
 ✅ Seamless edit-resubmit workflow for submitted transactions
+✅ Dynamic dashboard layout based on reference data
 
 The bot maintains clean chat history by automatically removing temporary messages and providing a professional editing experience.`;
 

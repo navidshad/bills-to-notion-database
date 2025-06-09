@@ -1179,6 +1179,68 @@ export class GoogleSheetsAdapter {
     }
   }
 
+  /**
+   * Completely clear the dashboard sheet and prepare for re-initialization
+   */
+  async clearDashboard() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const sheetName = SheetsConfig.getSheetName("dashboard");
+      const sheetId = await this.getSheetId(sheetName);
+
+      console.log("🗑️ Clearing dashboard sheet completely...");
+
+      // Get current dashboard config to know the size
+      const dashboardConfig = SheetsConfig.SHEETS.dashboard;
+      const maxRows = dashboardConfig.gridProperties.rowCount;
+      const maxCols = dashboardConfig.gridProperties.columnCount;
+
+      // Clear all values in the entire sheet
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A1:${SheetsConfig.numberToColumn(
+          maxCols
+        )}${maxRows}`,
+      });
+
+      // Remove all existing charts
+      await this.removeExistingCharts(sheetId);
+
+      // Clear all formatting to start fresh
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              updateCells: {
+                range: {
+                  sheetId: sheetId,
+                  startRowIndex: 0,
+                  endRowIndex: maxRows,
+                  startColumnIndex: 0,
+                  endColumnIndex: maxCols,
+                },
+                fields: "userEnteredFormat,userEnteredValue",
+              },
+            },
+          ],
+        },
+      });
+
+      console.log("✅ Dashboard sheet cleared completely");
+      return { success: true };
+    } catch (error) {
+      console.error("Error clearing dashboard:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   async setupConfigData() {
     if (!this.spreadsheetId) {
       throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");

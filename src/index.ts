@@ -10,6 +10,7 @@ import { registerInitCommand } from "./events/commands/init-command";
 import { registerHelpCommand } from "./events/commands/help-command";
 import { registerAddCommand } from "./events/commands/add-command";
 import registerPendingCommand from "./events/commands/pending-command";
+import { registerUpdateCommand } from "./events/commands/update-command";
 import { registerMessageHandler } from "./events/message-handler";
 import { registerCallbackHandler } from "./events/callback-handler";
 
@@ -24,6 +25,7 @@ registerInitCommand(bot);
 registerHelpCommand(bot);
 registerAddCommand(bot);
 registerPendingCommand(bot);
+registerUpdateCommand(bot);
 registerMessageHandler(bot);
 registerCallbackHandler(bot);
 
@@ -33,4 +35,7 @@ console.log("  /init - Initialize Google Sheets workbook");
 console.log("  /help - Show help information");
 console.log("  /add - Add new transaction (followed by photo/text)");
 console.log("  /pending - List all pending transactions");
+console.log(
+  "  /update - Update dashboard layout based on reference sheet changes"
+);
 console.log("Use /add command to process bills and expenses.");
