@@ -6,16 +6,56 @@ export interface SheetField {
   validation?: (value: any) => boolean;
 }
 
-export interface SheetSection {
-  title: string;
-  emoji: string;
-  startColumn: string;
-  endColumn: string;
+export interface SectionTable {
   fields: SheetField[];
+  maxRows?: number; // undefined = unlimited
+  hasHeaders?: boolean; // default: true
+  defaultData?: any[][]; // default data to populate
+}
+
+export interface SectionSpacing {
+  top?: number; // empty rows above
+  bottom?: number; // empty rows below
+  left?: number; // empty columns to the left
+  right?: number; // empty columns to the right
+}
+
+export interface SectionMerging {
+  colspan?: number; // merge columns (horizontal span)
+  rowspan?: number; // merge rows (vertical span)
+}
+
+export interface SheetSection {
+  id: string; // unique identifier
+  title: string;
+  emoji?: string;
+  table: SectionTable;
   color: {
     title: { red: number; green: number; blue: number };
     header: { red: number; green: number; blue: number };
     border: { red: number; green: number; blue: number };
+    data?: { red: number; green: number; blue: number }; // optional data background
+  };
+  spacing?: SectionSpacing;
+  merging?: SectionMerging;
+  // These will be calculated automatically based on grid position
+  _calculated?: {
+    startColumn: string;
+    endColumn: string;
+    startRow: number;
+    endRow: number;
+  };
+}
+
+export interface SheetGrid {
+  sections: (SheetSection | null)[][]; // 2D array, null for empty cells
+  gridSettings: {
+    defaultSectionWidth: number; // default columns per section
+    defaultSectionHeight: number; // default rows per section
+    sectionSpacing: {
+      horizontal: number; // default spacing between sections horizontally
+      vertical: number; // default spacing between sections vertically
+    };
   };
 }
 
@@ -25,8 +65,10 @@ export interface SheetConfiguration {
     rowCount: number;
     columnCount: number;
   };
-  sections?: SheetSection[];
+  // For simple field-based sheets (legacy support)
   fields?: SheetField[];
+  // For complex grid-based sheets (new system)
+  grid?: SheetGrid;
 }
 
 export class SheetsConfig {
@@ -92,70 +134,191 @@ export class SheetsConfig {
       name: "Reference",
       gridProperties: {
         rowCount: 50,
-        columnCount: 17,
+        columnCount: 20,
       },
-      sections: [
-        {
-          title: "📂 CATEGORIES",
-          emoji: "📂",
-          startColumn: "A",
-          endColumn: "E",
-          fields: [
-            { name: "#", type: "number", required: true },
-            { name: "ID", type: "string", required: true },
-            { name: "Name", type: "string", required: true },
-            { name: "Emoji", type: "string", default: "📋" },
-            { name: "Description", type: "string" },
-          ],
-          color: {
-            title: { red: 0.85, green: 0.92, blue: 1 },
-            header: { red: 0.9, green: 0.95, blue: 1 },
-            border: { red: 0.2, green: 0.4, blue: 0.8 },
-          },
-        },
-        {
-          title: "💳 ACCOUNTS",
-          emoji: "💳",
-          startColumn: "G",
-          endColumn: "L",
-          fields: [
-            { name: "#", type: "number", required: true },
-            { name: "ID", type: "string", required: true },
-            { name: "Name", type: "string", required: true },
-            { name: "Emoji", type: "string", default: "💳" },
+      grid: {
+        sections: [
+          [
+            // First row: Categories and Accounts
             {
-              name: "Currency",
-              type: "currency",
-              required: true,
-              default: "USD",
+              id: "categories",
+              title: "📂 CATEGORIES",
+              emoji: "📂",
+              table: {
+                fields: [
+                  { name: "#", type: "number", required: true },
+                  { name: "ID", type: "string", required: true },
+                  { name: "Name", type: "string", required: true },
+                  { name: "Emoji", type: "string", default: "📋" },
+                  { name: "Description", type: "string" },
+                ],
+                maxRows: 25,
+                hasHeaders: true,
+                defaultData: [
+                  [1, "food", "Food", "🍕", "Restaurants, groceries, takeout"],
+                  [
+                    2,
+                    "transport",
+                    "Transport",
+                    "🚗",
+                    "Gas, public transit, rideshare",
+                  ],
+                  [
+                    3,
+                    "shopping",
+                    "Shopping",
+                    "👕",
+                    "Clothes, electronics, general purchases",
+                  ],
+                  [
+                    4,
+                    "utilities",
+                    "Utilities",
+                    "💡",
+                    "Electricity, water, internet, phone",
+                  ],
+                  [
+                    5,
+                    "healthcare",
+                    "Healthcare",
+                    "🏥",
+                    "Medical bills, pharmacy, insurance",
+                  ],
+                  [
+                    6,
+                    "entertainment",
+                    "Entertainment",
+                    "🎬",
+                    "Movies, games, subscriptions",
+                  ],
+                  [
+                    7,
+                    "housing",
+                    "Housing",
+                    "🏠",
+                    "Rent, mortgage, maintenance",
+                  ],
+                  [
+                    8,
+                    "education",
+                    "Education",
+                    "📚",
+                    "Books, courses, tuition",
+                  ],
+                  [9, "other", "Other", "📋", "Miscellaneous expenses"],
+                ],
+              },
+              color: {
+                title: { red: 0.85, green: 0.92, blue: 1 },
+                header: { red: 0.9, green: 0.95, blue: 1 },
+                border: { red: 0.2, green: 0.4, blue: 0.8 },
+              },
             },
-            { name: "Description", type: "string" },
+            {
+              id: "accounts",
+              title: "💳 ACCOUNTS",
+              emoji: "💳",
+              table: {
+                fields: [
+                  { name: "#", type: "number", required: true },
+                  { name: "ID", type: "string", required: true },
+                  { name: "Name", type: "string", required: true },
+                  { name: "Emoji", type: "string", default: "💳" },
+                  {
+                    name: "Currency",
+                    type: "currency",
+                    required: true,
+                    default: "USD",
+                  },
+                  { name: "Description", type: "string" },
+                ],
+                maxRows: 10,
+                hasHeaders: true,
+                defaultData: [
+                  [
+                    1,
+                    "main_card",
+                    "Main Card",
+                    "💳",
+                    "USD",
+                    "Primary debit/credit card",
+                  ],
+                  [
+                    2,
+                    "checking",
+                    "Checking",
+                    "🏦",
+                    "USD",
+                    "Main checking account",
+                  ],
+                  [
+                    3,
+                    "euro_card",
+                    "Euro Card",
+                    "💳",
+                    "EUR",
+                    "European debit/credit card",
+                  ],
+                  [
+                    4,
+                    "euro_cash",
+                    "Euro Cash",
+                    "💰",
+                    "EUR",
+                    "Physical euro cash",
+                  ],
+                ],
+              },
+              color: {
+                title: { red: 0.85, green: 1, blue: 0.85 },
+                header: { red: 0.9, green: 1, blue: 0.9 },
+                border: { red: 0.2, green: 0.6, blue: 0.2 },
+              },
+            },
+            // Second row: Income Sources (spans across)
+            {
+              id: "income_sources",
+              title: "💰 INCOME SOURCES",
+              emoji: "💰",
+              table: {
+                fields: [
+                  { name: "#", type: "number", required: true },
+                  { name: "ID", type: "string", required: true },
+                  { name: "Name", type: "string", required: true },
+                  { name: "Emoji", type: "string", default: "💼" },
+                  { name: "Description", type: "string" },
+                ],
+                maxRows: 25,
+                hasHeaders: true,
+                defaultData: [
+                  [1, "salary", "Salary", "💼", "Monthly salary income"],
+                  [2, "freelance", "Freelance", "💻", "Freelance work income"],
+                  [3, "bonus", "Bonus", "🎁", "Performance bonus"],
+                  [4, "investment", "Investment", "📈", "Investment returns"],
+                  [5, "rental", "Rental", "🏠", "Rental property income"],
+                  [6, "business", "Business", "🏢", "Business income"],
+                  [7, "gift", "Gift", "🎁", "Gift money received"],
+                  [8, "refund", "Refund", "↩️", "Refund from purchase"],
+                  [9, "other_income", "Other", "📋", "Other income sources"],
+                ],
+              },
+              color: {
+                title: { red: 1, green: 0.9, blue: 0.7 },
+                header: { red: 1, green: 0.95, blue: 0.85 },
+                border: { red: 0.8, green: 0.5, blue: 0.2 },
+              },
+            },
           ],
-          color: {
-            title: { red: 0.85, green: 1, blue: 0.85 },
-            header: { red: 0.9, green: 1, blue: 0.9 },
-            border: { red: 0.2, green: 0.6, blue: 0.2 },
+        ],
+        gridSettings: {
+          defaultSectionWidth: 5, // 5 columns per section by default
+          defaultSectionHeight: 30, // 30 rows per section by default
+          sectionSpacing: {
+            horizontal: 1, // 1 column between sections
+            vertical: 2, // 2 rows between sections
           },
         },
-        {
-          title: "💰 INCOME SOURCES",
-          emoji: "💰",
-          startColumn: "N",
-          endColumn: "R",
-          fields: [
-            { name: "#", type: "number", required: true },
-            { name: "ID", type: "string", required: true },
-            { name: "Name", type: "string", required: true },
-            { name: "Emoji", type: "string", default: "💼" },
-            { name: "Description", type: "string" },
-          ],
-          color: {
-            title: { red: 1, green: 0.9, blue: 0.7 },
-            header: { red: 1, green: 0.95, blue: 0.85 },
-            border: { red: 0.8, green: 0.5, blue: 0.2 },
-          },
-        },
-      ],
+      },
     },
     config: {
       name: "Config",
@@ -175,44 +338,76 @@ export class SheetsConfig {
         rowCount: 100,
         columnCount: 15,
       },
-      sections: [
-        {
-          title: "⚙️ CONFIGURATION",
-          emoji: "⚙️",
-          startColumn: "H",
-          endColumn: "J",
-          fields: [
-            { name: "Setting", type: "string", required: true },
-            { name: "Value", type: "string", required: true },
-            { name: "Description", type: "string" },
+      grid: {
+        sections: [
+          [
+            // First row: Configuration section
+            {
+              id: "configuration",
+              title: "⚙️ CONFIGURATION",
+              emoji: "⚙️",
+              table: {
+                fields: [
+                  { name: "Setting", type: "string", required: true },
+                  { name: "Value", type: "string", required: true },
+                  { name: "Description", type: "string" },
+                ],
+                maxRows: 5,
+                hasHeaders: true,
+                defaultData: [
+                  [
+                    "Year",
+                    new Date().getFullYear().toString(),
+                    "Selected year for analysis",
+                  ],
+                ],
+              },
+              color: {
+                title: { red: 0.9, green: 0.85, blue: 1 },
+                header: { red: 0.95, green: 0.9, blue: 1 },
+                border: { red: 0.5, green: 0.2, blue: 0.8 },
+              },
+              merging: { colspan: 2 }, // spans across full width
+            },
           ],
-          color: {
-            title: { red: 0.9, green: 0.85, blue: 1 },
-            header: { red: 0.95, green: 0.9, blue: 1 },
-            border: { red: 0.5, green: 0.2, blue: 0.8 },
+          [
+            // Second row: Account Balances section
+            {
+              id: "account_balances",
+              title: "💰 ACCOUNT BALANCES",
+              emoji: "💰",
+              table: {
+                fields: [
+                  { name: "Account", type: "string", required: true },
+                  { name: "Currency", type: "currency", required: true },
+                  { name: "Balance", type: "number" },
+                ],
+                maxRows: 15, // limited to max accounts
+                hasHeaders: true,
+              },
+              color: {
+                title: { red: 0.7, green: 0.95, blue: 0.7 },
+                header: { red: 0.8, green: 0.98, blue: 0.8 },
+                border: { red: 0.1, green: 0.7, blue: 0.1 },
+              },
+              merging: { colspan: 2 }, // spans across full width
+              spacing: { top: 2 }, // 2 empty rows above
+            },
+          ],
+        ],
+        gridSettings: {
+          defaultSectionWidth: 3, // 3 columns per section by default
+          defaultSectionHeight: 20, // 20 rows per section by default
+          sectionSpacing: {
+            horizontal: 1, // 1 column between sections
+            vertical: 1, // 1 row between sections
           },
         },
-        {
-          title: "💰 ACCOUNT BALANCES",
-          emoji: "💰",
-          startColumn: "H",
-          endColumn: "J",
-          fields: [
-            { name: "Account", type: "string", required: true },
-            { name: "Currency", type: "currency", required: true },
-            { name: "Balance", type: "number" },
-          ],
-          color: {
-            title: { red: 0.7, green: 0.95, blue: 0.7 },
-            header: { red: 0.8, green: 0.98, blue: 0.8 },
-            border: { red: 0.1, green: 0.7, blue: 0.1 },
-          },
-        },
-      ],
+      },
     },
   };
 
-  // Default data for sheets
+  // Default data for compatibility (keeping legacy support)
   static readonly DEFAULT_DATA = {
     categories: [
       [1, "food", "Food", "🍕", "Restaurants, groceries, takeout"],
@@ -310,34 +505,138 @@ export class SheetsConfig {
     return `${startColumn}${startRow}:${endColumn}${endRow}`;
   }
 
-  static getSectionRange(
-    section: SheetSection,
-    startRow: number,
-    endRow: number
-  ): string {
+  // Calculate section positions in the grid
+  static calculateSectionPositions(grid: SheetGrid): void {
+    const { sections, gridSettings } = grid;
+    let currentRow = 1;
+
+    for (let rowIndex = 0; rowIndex < sections.length; rowIndex++) {
+      const sectionRow = sections[rowIndex];
+      let currentColumn = 1;
+      let maxRowsInThisGridRow = 0;
+
+      for (let colIndex = 0; colIndex < sectionRow.length; colIndex++) {
+        const section = sectionRow[colIndex];
+        if (!section) {
+          currentColumn +=
+            gridSettings.defaultSectionWidth +
+            gridSettings.sectionSpacing.horizontal;
+          continue;
+        }
+
+        // Apply spacing
+        const leftSpacing = section.spacing?.left || 0;
+        const rightSpacing = section.spacing?.right || 0;
+        const topSpacing = section.spacing?.top || 0;
+        const bottomSpacing = section.spacing?.bottom || 0;
+
+        // Calculate section dimensions
+        const colspan = section.merging?.colspan || 1;
+        const rowspan = section.merging?.rowspan || 1;
+
+        // For sections with colspan, calculate actual grid space it occupies
+        const totalGridWidth = gridSettings.defaultSectionWidth * colspan;
+
+        // Section should span exactly its field count, not the grid width
+        const effectiveWidth = section.table.fields.length;
+
+        // Calculate max rows for this section
+        const headerRows = section.table.hasHeaders !== false ? 1 : 0;
+        const titleRows = 1;
+        const dataRows =
+          section.table.maxRows || gridSettings.defaultSectionHeight;
+        const totalSectionRows =
+          titleRows + headerRows + dataRows + topSpacing + bottomSpacing;
+
+        // Track max rows in this grid row
+        maxRowsInThisGridRow = Math.max(maxRowsInThisGridRow, totalSectionRows);
+
+        // Calculate positions
+        const startColumn = this.numberToColumn(currentColumn + leftSpacing);
+        const endColumn = this.numberToColumn(
+          currentColumn + leftSpacing + effectiveWidth - 1
+        );
+        const startRow = currentRow + topSpacing;
+        const endRow = startRow + titleRows + headerRows + dataRows - 1;
+
+        // Store calculated positions
+        section._calculated = {
+          startColumn,
+          endColumn,
+          startRow,
+          endRow,
+        };
+
+        // Move to next column position
+        // Advance by the actual width of the section (field count)
+        currentColumn +=
+          effectiveWidth +
+          leftSpacing +
+          rightSpacing +
+          gridSettings.sectionSpacing.horizontal;
+      }
+
+      // Move to next row
+      currentRow += maxRowsInThisGridRow + gridSettings.sectionSpacing.vertical;
+    }
+  }
+
+  // Get section by ID from any sheet
+  static getSectionById(
+    sheetKey: string,
+    sectionId: string
+  ): SheetSection | undefined {
+    const sheet = this.SHEETS[sheetKey];
+    if (!sheet?.grid) return undefined;
+
+    for (const sectionRow of sheet.grid.sections) {
+      for (const section of sectionRow) {
+        if (section && section.id === sectionId) {
+          return section;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  // Get all sections from a sheet
+  static getAllSections(sheetKey: string): SheetSection[] {
+    const sheet = this.SHEETS[sheetKey];
+    if (!sheet?.grid) return [];
+
+    const allSections: SheetSection[] = [];
+    for (const sectionRow of sheet.grid.sections) {
+      for (const section of sectionRow) {
+        if (section) {
+          allSections.push(section);
+        }
+      }
+    }
+    return allSections;
+  }
+
+  // Legacy compatibility methods
+  static getSectionHeaderRange(section: SheetSection, row: number): string {
+    if (!section._calculated) {
+      throw new Error(
+        "Section positions not calculated. Call calculateSectionPositions first."
+      );
+    }
     return this.getRange(
-      section.startColumn,
-      startRow,
-      section.endColumn,
-      endRow
+      section._calculated.startColumn,
+      row,
+      section._calculated.endColumn,
+      row
     );
   }
 
-  static getFieldRange(
-    sheetConfig: SheetConfiguration,
-    fieldName: string,
-    startRow: number,
-    endRow: number
-  ): string {
-    const fieldIndex = sheetConfig.fields?.findIndex(
-      (field) => field.name === fieldName
-    );
-    if (fieldIndex === undefined || fieldIndex === -1) {
-      throw new Error(`Field "${fieldName}" not found in sheet configuration`);
+  static getSectionDataRange(section: SheetSection, startRow: number): string {
+    if (!section._calculated) {
+      throw new Error(
+        "Section positions not calculated. Call calculateSectionPositions first."
+      );
     }
-
-    const column = this.numberToColumn(fieldIndex + 1);
-    return this.getRange(column, startRow, column, endRow);
+    return `${section._calculated.startColumn}${startRow}:${section._calculated.endColumn}`;
   }
 
   static getHeadersRange(sheetConfig: SheetConfiguration): string {
@@ -351,14 +650,6 @@ export class SheetsConfig {
   ): string {
     const endColumn = this.numberToColumn(sheetConfig.fields?.length || 1);
     return `A${startRow}:${endColumn}`;
-  }
-
-  static getSectionHeaderRange(section: SheetSection, row: number): string {
-    return this.getRange(section.startColumn, row, section.endColumn, row);
-  }
-
-  static getSectionDataRange(section: SheetSection, startRow: number): string {
-    return `${section.startColumn}${startRow}:${section.endColumn}`;
   }
 
   // Get sheet name with dynamic values
@@ -376,7 +667,7 @@ export class SheetsConfig {
     return name;
   }
 
-  // Get field headers for a sheet
+  // Get field headers for a sheet (legacy support)
   static getFieldHeaders(sheetKey: string): string[] {
     const sheet = this.SHEETS[sheetKey];
     if (!sheet) {
@@ -387,23 +678,33 @@ export class SheetsConfig {
       return sheet.fields.map((field) => field.name);
     }
 
-    if (sheet.sections) {
-      // For sectioned sheets, return all field names from all sections
-      return sheet.sections.flatMap((section) =>
-        section.fields.map((field) => field.name)
+    if (sheet.grid) {
+      // For grid-based sheets, return all field names from all sections
+      const allSections = this.getAllSections(sheetKey);
+      return allSections.flatMap((section) =>
+        section.table.fields.map((field) => field.name)
       );
     }
 
     return [];
   }
 
-  // Get section by name
+  // Legacy compatibility - get section by title
   static getSection(
     sheetKey: string,
     sectionTitle: string
   ): SheetSection | undefined {
     const sheet = this.SHEETS[sheetKey];
-    return sheet?.sections?.find((section) => section.title === sectionTitle);
+    if (!sheet?.grid) return undefined;
+
+    for (const sectionRow of sheet.grid.sections) {
+      for (const section of sectionRow) {
+        if (section && section.title === sectionTitle) {
+          return section;
+        }
+      }
+    }
+    return undefined;
   }
 
   // Get field configuration
@@ -414,9 +715,12 @@ export class SheetsConfig {
       return sheet.fields.find((field) => field.name === fieldName);
     }
 
-    if (sheet?.sections) {
-      for (const section of sheet.sections) {
-        const field = section.fields.find((field) => field.name === fieldName);
+    if (sheet?.grid) {
+      const allSections = this.getAllSections(sheetKey);
+      for (const section of allSections) {
+        const field = section.table.fields.find(
+          (field) => field.name === fieldName
+        );
         if (field) return field;
       }
     }
@@ -515,5 +819,171 @@ export class SheetsConfig {
       }
       return field.default || "";
     });
+  }
+
+  /**
+   * Demo method to showcase the new grid-based configuration system
+   * This demonstrates all the new features: 2D grid layout, sections, spacing, merging, etc.
+   */
+  static demonstrateGridConfiguration(): void {
+    console.log("🚀 New Grid-Based Configuration System Demo\n");
+
+    // Demo 1: Reference Sheet Layout
+    console.log("📋 Reference Sheet Configuration:");
+    const referenceConfig = this.SHEETS.reference;
+
+    if (referenceConfig.grid) {
+      console.log(
+        `Grid size: ${referenceConfig.grid.sections.length} rows x ${
+          referenceConfig.grid.sections[0]?.length || 0
+        } columns`
+      );
+      console.log(
+        `Default section size: ${referenceConfig.grid.gridSettings.defaultSectionWidth} cols x ${referenceConfig.grid.gridSettings.defaultSectionHeight} rows`
+      );
+      console.log(
+        `Section spacing: H=${referenceConfig.grid.gridSettings.sectionSpacing.horizontal}, V=${referenceConfig.grid.gridSettings.sectionSpacing.vertical}\n`
+      );
+
+      referenceConfig.grid.sections.forEach((row, rowIndex) => {
+        console.log(`  Grid Row ${rowIndex + 1}:`);
+        row.forEach((section, colIndex) => {
+          if (section) {
+            console.log(`    🔹 ${section.title} (ID: ${section.id})`);
+            console.log(
+              `       Fields: ${section.table.fields
+                .map((f) => f.name)
+                .join(", ")}`
+            );
+            console.log(
+              `       Max rows: ${section.table.maxRows || "unlimited"}`
+            );
+            if (section.spacing) {
+              console.log(`       Spacing: ${JSON.stringify(section.spacing)}`);
+            }
+            if (section.merging) {
+              console.log(`       Merging: ${JSON.stringify(section.merging)}`);
+            }
+          } else {
+            console.log(`    🔸 [Empty Grid Cell]`);
+          }
+        });
+      });
+    }
+
+    // Demo 2: Calculate and Display Positions
+    console.log("\n🎯 Calculating Section Positions:");
+    if (referenceConfig.grid) {
+      this.calculateSectionPositions(referenceConfig.grid);
+
+      const allSections = this.getAllSections("reference");
+      allSections.forEach((section) => {
+        if (section._calculated) {
+          console.log(`  ${section.title}:`);
+          console.log(
+            `    📍 Position: ${section._calculated.startColumn}${section._calculated.startRow}:${section._calculated.endColumn}${section._calculated.endRow}`
+          );
+          console.log(
+            `    📏 Size: ${
+              this.columnToNumber(section._calculated.endColumn) -
+              this.columnToNumber(section._calculated.startColumn) +
+              1
+            } cols x ${
+              section._calculated.endRow - section._calculated.startRow + 1
+            } rows`
+          );
+        }
+      });
+    }
+
+    // Demo 3: Dashboard Configuration
+    console.log("\n📊 Dashboard Sheet Configuration:");
+    const dashboardConfig = this.SHEETS.dashboard;
+    if (dashboardConfig.grid) {
+      this.calculateSectionPositions(dashboardConfig.grid);
+
+      const dashboardSections = this.getAllSections("dashboard");
+      dashboardSections.forEach((section) => {
+        console.log(`  🔹 ${section.title} (ID: ${section.id})`);
+        if (section._calculated) {
+          console.log(
+            `     📍 Position: ${section._calculated.startColumn}${section._calculated.startRow}:${section._calculated.endColumn}${section._calculated.endRow}`
+          );
+        }
+        console.log(
+          `     📝 Fields: ${section.table.fields
+            .map((f) => f.name)
+            .join(", ")}`
+        );
+        if (section.table.defaultData) {
+          console.log(
+            `     📄 Default data rows: ${section.table.defaultData.length}`
+          );
+        }
+      });
+    }
+
+    // Demo 4: Section Lookup Features
+    console.log("\n🔍 Section Lookup and Access:");
+
+    // By ID
+    const categoriesSection = this.getSectionById("reference", "categories");
+    console.log(
+      `  Categories section by ID: ${
+        categoriesSection ? "✅ Found" : "❌ Not found"
+      }`
+    );
+    if (categoriesSection) {
+      console.log(`    Title: ${categoriesSection.title}`);
+      console.log(`    Fields: ${categoriesSection.table.fields.length}`);
+      console.log(
+        `    Has default data: ${
+          categoriesSection.table.defaultData ? "Yes" : "No"
+        }`
+      );
+    }
+
+    // By title (legacy compatibility)
+    const accountsSection = this.getSection("reference", "💳 ACCOUNTS");
+    console.log(
+      `  Accounts section by title: ${
+        accountsSection ? "✅ Found" : "❌ Not found"
+      }`
+    );
+
+    // Demo 5: Backward Compatibility
+    console.log("\n🔄 Legacy Compatibility:");
+
+    // Field-based sheets still work
+    const billsConfig = this.SHEETS.bills;
+    console.log(
+      `  Bills sheet (field-based): ${
+        billsConfig.fields ? "✅ Compatible" : "❌ Not compatible"
+      }`
+    );
+    if (billsConfig.fields) {
+      console.log(`    Fields: ${billsConfig.fields.length}`);
+      console.log(
+        `    Headers: ${this.getFieldHeaders("bills")
+          .slice(0, 3)
+          .join(", ")}...`
+      );
+    }
+
+    // Demo 6: New Features Summary
+    console.log("\n🎉 New Features Summary:");
+    console.log("  ✅ 2D Grid Layout: Sections arranged in rows and columns");
+    console.log("  ✅ Flexible Spacing: Empty rows/columns around sections");
+    console.log("  ✅ Section Merging: Colspan and rowspan support");
+    console.log("  ✅ Dynamic Positioning: Automatic coordinate calculation");
+    console.log("  ✅ Table Limits: Configurable max rows per section");
+    console.log("  ✅ Default Data: Built-in default content");
+    console.log("  ✅ Color Themes: Per-section color configuration");
+    console.log(
+      "  ✅ Legacy Support: Backward compatible with existing configs"
+    );
+    console.log("  ✅ Type Safety: Full TypeScript support");
+
+    console.log("\n✨ Grid Configuration Demo Complete!");
   }
 }

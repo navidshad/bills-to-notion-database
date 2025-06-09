@@ -165,8 +165,10 @@ export class GoogleSheetsAdapter {
           values: [headers],
         },
       });
-    } else if (config.sections) {
-      // Reference sheet with sections - handled separately
+    } else if (config.grid) {
+      // Grid-based sheets with sections - calculate positions and handle setup
+      SheetsConfig.calculateSectionPositions(config.grid);
+
       if (sheetKey === "reference") {
         await this.setupReferenceData();
       } else if (sheetKey === "dashboard") {
@@ -199,11 +201,25 @@ export class GoogleSheetsAdapter {
     const sheetName = SheetsConfig.getSheetName("reference");
     const config = SheetsConfig.SHEETS.reference;
 
-    // Setup section titles using configuration
-    if (config.sections) {
-      for (const section of config.sections) {
-        const titleRange = SheetsConfig.getSectionHeaderRange(section, 1);
+    // Setup sections using new grid configuration
+    if (config.grid) {
+      // Ensure positions are calculated first
+      SheetsConfig.calculateSectionPositions(config.grid);
 
+      const allSections = SheetsConfig.getAllSections("reference");
+
+      for (const section of allSections) {
+        if (!section._calculated) {
+          throw new Error(
+            "Section positions not calculated. Call calculateSectionPositions first."
+          );
+        }
+
+        // Setup section title
+        const titleRange = SheetsConfig.getSectionHeaderRange(
+          section,
+          section._calculated.startRow
+        );
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
           range: `${sheetName}!${titleRange}`,
@@ -212,15 +228,13 @@ export class GoogleSheetsAdapter {
             values: [[section.title]],
           },
         });
-      }
-    }
 
-    // Setup column headers using configuration
-    if (config.sections) {
-      for (const section of config.sections) {
-        const headerRange = SheetsConfig.getSectionHeaderRange(section, 2);
-        const headers = section.fields.map((field) => field.name);
-
+        // Setup column headers
+        const headerRange = SheetsConfig.getSectionHeaderRange(
+          section,
+          section._calculated.startRow + 1
+        );
+        const headers = section.table.fields.map((field) => field.name);
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
           range: `${sheetName}!${headerRange}`,
@@ -229,49 +243,31 @@ export class GoogleSheetsAdapter {
             values: [headers],
           },
         });
-      }
-    }
 
-    // Setup default data using configuration
-    if (config.sections) {
-      const sectionDataMap: Record<string, any[]> = {
-        "📂 CATEGORIES": SheetsConfig.DEFAULT_DATA.categories,
-        "💳 ACCOUNTS": SheetsConfig.DEFAULT_DATA.accounts,
-        "💰 INCOME SOURCES": SheetsConfig.DEFAULT_DATA.incomeSources,
-      };
-
-      const sectionLimitsMap: Record<string, number> = {
-        "📂 CATEGORIES": SheetsConfig.LIMITS.MAX_CATEGORIES,
-        "💳 ACCOUNTS": SheetsConfig.LIMITS.MAX_ACCOUNTS,
-        "💰 INCOME SOURCES": SheetsConfig.LIMITS.MAX_INCOME_SOURCES,
-      };
-
-      for (const section of config.sections) {
-        const sectionData = sectionDataMap[section.title];
-        if (sectionData) {
-          const dataRange = SheetsConfig.getSectionDataRange(section, 3);
-          const endRow = 3 + sectionData.length - 1;
-          const fullRange = `${sheetName}!${section.startColumn}3:${section.endColumn}${endRow}`;
+        // Setup default data
+        if (section.table.defaultData) {
+          const dataStartRow = section._calculated.startRow + 2; // After title and headers
+          const endRow = dataStartRow + section.table.defaultData.length - 1;
+          const fullRange = `${sheetName}!${section._calculated.startColumn}${dataStartRow}:${section._calculated.endColumn}${endRow}`;
 
           await this.sheets.spreadsheets.values.update({
             spreadsheetId: this.spreadsheetId,
             range: fullRange,
             valueInputOption: "RAW",
-            requestBody: { values: sectionData },
+            requestBody: { values: section.table.defaultData },
           });
 
-          // Add limit label for all sections
-          const sectionLimit = sectionLimitsMap[section.title];
-          if (sectionLimit) {
+          // Add limit label for sections with maxRows
+          if (section.table.maxRows) {
             const limitRow = endRow + 2; // Skip one row and add limit label
-            const limitRange = `${sheetName}!${section.startColumn}${limitRow}:${section.endColumn}${limitRow}`;
-            const limitText = `Max ${sectionLimit} ${section.title
+            const limitRange = `${sheetName}!${section._calculated.startColumn}${limitRow}:${section._calculated.endColumn}${limitRow}`;
+            const limitText = `Max ${section.table.maxRows} ${section.title
               .replace(/[📂💳💰]/g, "")
               .trim()
               .toLowerCase()} allowed`;
 
             // Create appropriate number of empty columns before the limit text
-            const fieldCount = section.fields.length;
+            const fieldCount = section.table.fields.length;
             const limitValues = Array(fieldCount).fill("");
             limitValues[2] = limitText; // Put limit text in the "Name" column (3rd column, index 2)
 
@@ -294,45 +290,69 @@ export class GoogleSheetsAdapter {
 
   async formatReferenceSheet(spreadsheetId: string, sheetName: string) {
     try {
-      // Get sheet ID for formatting
       const sheetId = await this.getSheetId(sheetName);
+      const config = SheetsConfig.SHEETS.reference;
 
-      const requests = [
-        // Categories section title formatting (A1:E1)
-        {
+      if (!config.grid) return;
+
+      const requests = [];
+
+      // Calculate positions first
+      SheetsConfig.calculateSectionPositions(config.grid);
+
+      // Format each section using calculated coordinates from section definitions
+      const allSections = SheetsConfig.getAllSections("reference");
+      for (const section of allSections) {
+        if (!section._calculated) continue;
+
+        // Use calculated coordinates from the section definitions
+        const startCol =
+          SheetsConfig.columnToNumber(section._calculated.startColumn) - 1;
+        const endCol = SheetsConfig.columnToNumber(
+          section._calculated.endColumn
+        );
+
+        // Calculate row positions based on section structure
+        const titleRow = section._calculated.startRow - 1; // Convert to 0-based index
+        const headerRow = titleRow + 1;
+        const dataStartRow = headerRow + 1;
+        const dataEndRow = section._calculated.endRow - 1; // Convert to 0-based index
+
+        // Section title formatting - use colors from section definition
+        requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 1,
-              startColumnIndex: 0,
-              endColumnIndex: 5,
+              startRowIndex: titleRow,
+              endRowIndex: titleRow + 1,
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.85, green: 0.92, blue: 1 }, // Light blue
+                backgroundColor: section.color.title,
                 textFormat: { bold: true, fontSize: 14 },
                 horizontalAlignment: "LEFT",
                 borders: {
                   top: {
                     style: "SOLID",
                     width: 3,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   bottom: {
                     style: "SOLID",
                     width: 2,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   left: {
                     style: "SOLID",
                     width: 3,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   right: {
                     style: "SOLID",
-                    width: 2,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    width: 3,
+                    color: section.color.border,
                   },
                 },
               },
@@ -340,450 +360,122 @@ export class GoogleSheetsAdapter {
             fields:
               "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
           },
-        },
-        // Categories column headers formatting (A2:E2)
-        {
+        });
+
+        // Section headers formatting - use colors from section definition
+        requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: 2,
-              startColumnIndex: 0,
-              endColumnIndex: 5,
+              startRowIndex: headerRow,
+              endRowIndex: headerRow + 1,
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.9, green: 0.95, blue: 1 }, // Lighter blue
-                textFormat: { bold: true },
-                horizontalAlignment: "LEFT",
+                backgroundColor: section.color.header,
+                textFormat: { bold: true, fontSize: 11 },
+                horizontalAlignment: "CENTER",
                 wrapStrategy: "CLIP",
                 borders: {
                   top: {
                     style: "SOLID",
                     width: 1,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   bottom: {
                     style: "SOLID",
                     width: 2,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   left: {
                     style: "SOLID",
                     width: 2,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   right: {
                     style: "SOLID",
-                    width: 1,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    width: 2,
+                    color: section.color.border,
                   },
                 },
               },
             },
             fields:
-              "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,borders)",
+              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy,borders)",
           },
-        },
-        // Categories data border (A3:E34)
-        {
+        });
+
+        // Data area borders - use calculated coordinates and section colors
+        requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: 2,
-              endRowIndex: 34,
-              startColumnIndex: 0,
-              endColumnIndex: 5,
+              startRowIndex: dataStartRow,
+              endRowIndex: dataEndRow + 1,
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
             },
             cell: {
               userEnteredFormat: {
+                backgroundColor: section.color.data || undefined, // Use section data color if defined
+                horizontalAlignment: "LEFT",
                 wrapStrategy: "CLIP",
                 borders: {
                   left: {
                     style: "SOLID",
                     width: 2,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    color: section.color.border,
                   },
                   right: {
                     style: "SOLID",
-                    width: 1,
-                    color: { red: 0.2, green: 0.4, blue: 0.8 },
+                    width: 2,
+                    color: section.color.border,
                   },
                   top: {
                     style: "SOLID",
                     width: 1,
-                    color: { red: 0.7, green: 0.7, blue: 0.7 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.7, green: 0.7, blue: 0.7 },
-                  },
-                },
-              },
-            },
-            fields: "userEnteredFormat(wrapStrategy,borders)",
-          },
-        },
-        // # Column width formatting - make all # columns narrower (A, G, N)
-        {
-          updateDimensionProperties: {
-            range: {
-              sheetId: sheetId,
-              dimension: "COLUMNS",
-              startIndex: 0, // Column A
-              endIndex: 1,
-            },
-            properties: { pixelSize: 50 },
-            fields: "pixelSize",
-          },
-        },
-        {
-          updateDimensionProperties: {
-            range: {
-              sheetId: sheetId,
-              dimension: "COLUMNS",
-              startIndex: 6, // Column G
-              endIndex: 7,
-            },
-            properties: { pixelSize: 50 },
-            fields: "pixelSize",
-          },
-        },
-        {
-          updateDimensionProperties: {
-            range: {
-              sheetId: sheetId,
-              dimension: "COLUMNS",
-              startIndex: 13, // Column N
-              endIndex: 14,
-            },
-            properties: { pixelSize: 50 },
-            fields: "pixelSize",
-          },
-        },
-        // Gap column F formatting
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 35,
-              startColumnIndex: 5,
-              endColumnIndex: 6,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 },
-                borders: {
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.5, green: 0.5, blue: 0.5 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.5, green: 0.5, blue: 0.5 },
-                  },
-                },
-              },
-            },
-            fields: "userEnteredFormat(backgroundColor,borders)",
-          },
-        },
-        // Accounts section title formatting (G1:L1)
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 1,
-              startColumnIndex: 6,
-              endColumnIndex: 12,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.85, green: 1, blue: 0.85 }, // Light green
-                textFormat: { bold: true, fontSize: 14 },
-                horizontalAlignment: "LEFT",
-                borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 3,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                    color: { red: 0.8, green: 0.8, blue: 0.8 },
                   },
                   bottom: {
                     style: "SOLID",
                     width: 2,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 3,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
+                    color: section.color.border,
                   },
                 },
               },
             },
             fields:
-              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
+              "userEnteredFormat(backgroundColor,horizontalAlignment,wrapStrategy,borders)",
           },
-        },
-        // Accounts column headers formatting (G2:L2)
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: 2,
-              startColumnIndex: 6,
-              endColumnIndex: 12,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.9, green: 1, blue: 0.9 }, // Lighter green
-                textFormat: { bold: true },
-                horizontalAlignment: "LEFT",
-                wrapStrategy: "CLIP",
-                borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  left: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                },
+        });
+
+        // Make the first column (ID/# column) narrower for each section
+        if (section.table.fields[0]?.name === "#") {
+          requests.push({
+            updateDimensionProperties: {
+              range: {
+                sheetId: sheetId,
+                dimension: "COLUMNS",
+                startIndex: startCol,
+                endIndex: startCol + 1,
               },
+              properties: { pixelSize: 50 },
+              fields: "pixelSize",
             },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,borders)",
-          },
-        },
-        // Accounts data border (G3:L18)
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 2,
-              endRowIndex: 18,
-              startColumnIndex: 6,
-              endColumnIndex: 12,
-            },
-            cell: {
-              userEnteredFormat: {
-                wrapStrategy: "CLIP",
-                borders: {
-                  left: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.2, green: 0.6, blue: 0.2 },
-                  },
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.7, green: 0.7, blue: 0.7 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.7, green: 0.7, blue: 0.7 },
-                  },
-                },
-              },
-            },
-            fields: "userEnteredFormat(wrapStrategy,borders)",
-          },
-        },
-        // Gap column M formatting
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 35,
-              startColumnIndex: 12,
-              endColumnIndex: 13,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 },
-                borders: {
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.5, green: 0.5, blue: 0.5 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.5, green: 0.5, blue: 0.5 },
-                  },
-                },
-              },
-            },
-            fields: "userEnteredFormat(backgroundColor,borders)",
-          },
-        },
-        // Income Sources section title formatting (N1:R1)
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 1,
-              startColumnIndex: 13,
-              endColumnIndex: 18,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 1, green: 0.9, blue: 0.7 }, // Light orange/yellow
-                textFormat: { bold: true, fontSize: 14 },
-                horizontalAlignment: "LEFT",
-                borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 3,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 3,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                },
-              },
-            },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
-          },
-        },
-        // Income Sources column headers formatting (N2:R2)
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: 2,
-              startColumnIndex: 13,
-              endColumnIndex: 18,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 1, green: 0.95, blue: 0.85 }, // Lighter orange
-                textFormat: { bold: true },
-                horizontalAlignment: "LEFT",
-                wrapStrategy: "CLIP",
-                borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  left: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                },
-              },
-            },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,borders)",
-          },
-        },
-        // Income Sources data border (N3:R34)
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 2,
-              endRowIndex: 34,
-              startColumnIndex: 13,
-              endColumnIndex: 18,
-            },
-            cell: {
-              userEnteredFormat: {
-                wrapStrategy: "CLIP",
-                borders: {
-                  left: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 3,
-                    color: { red: 0.8, green: 0.5, blue: 0.2 },
-                  },
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.7, green: 0.7, blue: 0.7 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.7, green: 0.7, blue: 0.7 },
-                  },
-                },
-              },
-            },
-            fields: "userEnteredFormat(wrapStrategy,borders)",
-          },
-        },
-      ];
+          });
+        }
+      }
 
       await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId,
+        spreadsheetId,
         requestBody: { requests },
       });
 
-      console.log("Reference sheet formatting applied successfully");
+      console.log(
+        "Reference sheet formatted successfully using section-defined coordinates and colors"
+      );
     } catch (error) {
       console.error("Error formatting reference sheet:", error);
     }
@@ -797,20 +489,28 @@ export class GoogleSheetsAdapter {
     const sheetName = SheetsConfig.getSheetName("dashboard");
     const config = SheetsConfig.SHEETS.dashboard;
 
-    if (!config.sections) {
-      throw new Error("Dashboard configuration sections not found");
+    if (!config.grid) {
+      throw new Error("Dashboard configuration grid not found");
     }
 
+    // Calculate section positions
+    SheetsConfig.calculateSectionPositions(config.grid);
+
     try {
-      // Setup Configuration section (rows 1-5)
-      const configSection = config.sections.find(
-        (s) => s.title === "⚙️ CONFIGURATION"
+      // Setup Configuration section
+      const configSection = SheetsConfig.getSectionById(
+        "dashboard",
+        "configuration"
       );
-      if (configSection) {
+      if (configSection && configSection._calculated) {
         // Setup title
+        const titleRange = SheetsConfig.getSectionHeaderRange(
+          configSection,
+          configSection._calculated.startRow
+        );
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!${configSection.startColumn}1:${configSection.endColumn}1`,
+          range: `${sheetName}!${titleRange}`,
           valueInputOption: "RAW",
           requestBody: {
             values: [[configSection.title]],
@@ -818,10 +518,14 @@ export class GoogleSheetsAdapter {
         });
 
         // Setup headers
-        const headers = configSection.fields.map((field) => field.name);
+        const headers = configSection.table.fields.map((field) => field.name);
+        const headerRange = SheetsConfig.getSectionHeaderRange(
+          configSection,
+          configSection._calculated.startRow + 1
+        );
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!${configSection.startColumn}2:${configSection.endColumn}2`,
+          range: `${sheetName}!${headerRange}`,
           valueInputOption: "RAW",
           requestBody: {
             values: [headers],
@@ -829,31 +533,37 @@ export class GoogleSheetsAdapter {
         });
 
         // Setup configuration data
-        if (SheetsConfig.DEFAULT_DATA.dashboard?.configuration) {
+        if (configSection.table.defaultData) {
+          const dataStartRow = configSection._calculated.startRow + 2;
           const endRow =
-            3 + SheetsConfig.DEFAULT_DATA.dashboard.configuration.length - 1;
-          const fullRange = `${sheetName}!${configSection.startColumn}3:${configSection.endColumn}${endRow}`;
+            dataStartRow + configSection.table.defaultData.length - 1;
+          const fullRange = `${sheetName}!${configSection._calculated.startColumn}${dataStartRow}:${configSection._calculated.endColumn}${endRow}`;
 
           await this.sheets.spreadsheets.values.update({
             spreadsheetId: this.spreadsheetId,
             range: fullRange,
             valueInputOption: "RAW",
             requestBody: {
-              values: SheetsConfig.DEFAULT_DATA.dashboard.configuration,
+              values: configSection.table.defaultData,
             },
           });
         }
       }
 
-      // Setup Account Balances section (starting from row 7)
-      const balanceSection = config.sections.find(
-        (s) => s.title === "💰 ACCOUNT BALANCES"
+      // Setup Account Balances section
+      const balanceSection = SheetsConfig.getSectionById(
+        "dashboard",
+        "account_balances"
       );
-      if (balanceSection) {
+      if (balanceSection && balanceSection._calculated) {
         // Setup title
+        const titleRange = SheetsConfig.getSectionHeaderRange(
+          balanceSection,
+          balanceSection._calculated.startRow
+        );
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!${balanceSection.startColumn}7:${balanceSection.endColumn}7`,
+          range: `${sheetName}!${titleRange}`,
           valueInputOption: "RAW",
           requestBody: {
             values: [[balanceSection.title]],
@@ -861,10 +571,14 @@ export class GoogleSheetsAdapter {
         });
 
         // Setup headers
-        const headers = balanceSection.fields.map((field) => field.name);
+        const headers = balanceSection.table.fields.map((field) => field.name);
+        const headerRange = SheetsConfig.getSectionHeaderRange(
+          balanceSection,
+          balanceSection._calculated.startRow + 1
+        );
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!${balanceSection.startColumn}8:${balanceSection.endColumn}8`,
+          range: `${sheetName}!${headerRange}`,
           valueInputOption: "RAW",
           requestBody: {
             values: [headers],
@@ -889,12 +603,16 @@ export class GoogleSheetsAdapter {
     const sheetName = SheetsConfig.getSheetName("dashboard");
     const config = SheetsConfig.SHEETS.dashboard;
 
-    if (!config.sections) return;
+    if (!config.grid) return;
 
-    const balanceSection = config.sections.find(
-      (s) => s.title === "💰 ACCOUNT BALANCES"
+    // Ensure positions are calculated first
+    SheetsConfig.calculateSectionPositions(config.grid);
+
+    const balanceSection = SheetsConfig.getSectionById(
+      "dashboard",
+      "account_balances"
     );
-    if (!balanceSection) return;
+    if (!balanceSection || !balanceSection._calculated) return;
 
     try {
       const maxAccounts = SheetsConfig.LIMITS.MAX_ACCOUNTS;
@@ -903,8 +621,9 @@ export class GoogleSheetsAdapter {
       );
 
       // Clear existing data first (clear all account rows)
-      const clearEndRow = 9 + maxAccounts - 1;
-      const clearRange = `${sheetName}!${balanceSection.startColumn}9:${balanceSection.endColumn}${clearEndRow}`;
+      const dataStartRow = balanceSection._calculated.startRow + 2; // After title and headers
+      const clearEndRow = dataStartRow + maxAccounts - 1;
+      const clearRange = `${sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${clearEndRow}`;
       await this.sheets.spreadsheets.values.clear({
         spreadsheetId: this.spreadsheetId,
         range: clearRange,
@@ -920,7 +639,7 @@ export class GoogleSheetsAdapter {
       // Setup account data with formulas that reference the Reference sheet dynamically
       const accountData = [];
       for (let i = 0; i < maxAccounts; i++) {
-        const currentRow = 9 + i; // Starting from row 9 (after title and headers at rows 7-8)
+        const currentRow = dataStartRow + i; // Starting from calculated data start row
         const referenceRow = 3 + i; // Reference sheet accounts start from row 3
 
         // Account name formula: =IF(Reference!I{referenceRow}<>"", Reference!J{referenceRow}&" "&Reference!I{referenceRow}, "")
@@ -941,8 +660,8 @@ export class GoogleSheetsAdapter {
       }
 
       if (accountData.length > 0) {
-        const endRow = 9 + accountData.length - 1;
-        const fullRange = `${sheetName}!${balanceSection.startColumn}9:${balanceSection.endColumn}${endRow}`;
+        const endRow = dataStartRow + accountData.length - 1;
+        const fullRange = `${sheetName}!${balanceSection._calculated.startColumn}${dataStartRow}:${balanceSection._calculated.endColumn}${endRow}`;
 
         console.log(`Writing dynamic account formulas to range: ${fullRange}`);
 
@@ -1109,49 +828,38 @@ export class GoogleSheetsAdapter {
       const sheetId = await this.getSheetId(sheetName);
       const config = SheetsConfig.SHEETS.dashboard;
 
-      if (!config.sections) return;
+      if (!config.grid) return;
 
       const requests = [];
 
-      // Define row ranges for each section
-      const sectionRowRanges: Record<
-        string,
-        {
-          startRow: number;
-          headerRow: number;
-          dataStartRow: number;
-          dataEndRow: number;
-        }
-      > = {
-        "⚙️ CONFIGURATION": {
-          startRow: 0,
-          headerRow: 1,
-          dataStartRow: 2,
-          dataEndRow: 6,
-        },
-        "💰 ACCOUNT BALANCES": {
-          startRow: 6,
-          headerRow: 7,
-          dataStartRow: 8,
-          dataEndRow: 25,
-        },
-      };
+      // Calculate positions first
+      SheetsConfig.calculateSectionPositions(config.grid);
 
-      // Format each section
-      for (const section of config.sections) {
-        const startCol = SheetsConfig.columnToNumber(section.startColumn) - 1;
-        const endCol = SheetsConfig.columnToNumber(section.endColumn);
-        const rowRange = sectionRowRanges[section.title];
+      // Format each section using calculated coordinates from section definitions
+      const allSections = SheetsConfig.getAllSections("dashboard");
+      for (const section of allSections) {
+        if (!section._calculated) continue;
 
-        if (!rowRange) continue;
+        // Use calculated coordinates from the section definitions
+        const startCol =
+          SheetsConfig.columnToNumber(section._calculated.startColumn) - 1;
+        const endCol = SheetsConfig.columnToNumber(
+          section._calculated.endColumn
+        );
 
-        // Section title formatting
+        // Calculate row positions based on section structure
+        const titleRow = section._calculated.startRow - 1; // Convert to 0-based index
+        const headerRow = titleRow + 1;
+        const dataStartRow = headerRow + 1;
+        const dataEndRow = section._calculated.endRow - 1; // Convert to 0-based index
+
+        // Section title formatting - use colors from section definition
         requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: rowRange.startRow,
-              endRowIndex: rowRange.startRow + 1,
+              startRowIndex: titleRow,
+              endRowIndex: titleRow + 1,
               startColumnIndex: startCol,
               endColumnIndex: endCol,
             },
@@ -1189,13 +897,13 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Section headers formatting
+        // Section headers formatting - use colors from section definition
         requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: rowRange.headerRow,
-              endRowIndex: rowRange.headerRow + 1,
+              startRowIndex: headerRow,
+              endRowIndex: headerRow + 1,
               startColumnIndex: startCol,
               endColumnIndex: endCol,
             },
@@ -1233,18 +941,19 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Data area borders
+        // Data area borders - use calculated coordinates and section colors
         requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: rowRange.dataStartRow,
-              endRowIndex: rowRange.dataEndRow,
+              startRowIndex: dataStartRow,
+              endRowIndex: dataEndRow + 1,
               startColumnIndex: startCol,
               endColumnIndex: endCol,
             },
             cell: {
               userEnteredFormat: {
+                backgroundColor: section.color.data || undefined, // Use section data color if defined
                 horizontalAlignment: "LEFT",
                 borders: {
                   left: {
@@ -1254,7 +963,7 @@ export class GoogleSheetsAdapter {
                   },
                   right: {
                     style: "SOLID",
-                    width: 1,
+                    width: 2,
                     color: section.color.border,
                   },
                   top: {
@@ -1264,13 +973,14 @@ export class GoogleSheetsAdapter {
                   },
                   bottom: {
                     style: "SOLID",
-                    width: 1,
-                    color: { red: 0.8, green: 0.8, blue: 0.8 },
+                    width: 2,
+                    color: section.color.border,
                   },
                 },
               },
             },
-            fields: "userEnteredFormat(horizontalAlignment,borders)",
+            fields:
+              "userEnteredFormat(backgroundColor,horizontalAlignment,borders)",
           },
         });
       }
@@ -1281,7 +991,7 @@ export class GoogleSheetsAdapter {
       });
 
       console.log(
-        "Dashboard sheet formatted successfully with beautiful colors"
+        "Dashboard sheet formatted successfully using section-defined coordinates and colors"
       );
     } catch (error) {
       console.error("Error formatting Dashboard sheet:", error);
