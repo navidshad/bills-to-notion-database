@@ -64,6 +64,7 @@ export class GoogleSheetsAdapter {
         SheetsConfig.getSheetName("reference"),
         SheetsConfig.getSheetName("config"),
         SheetsConfig.getSheetName("tempBills"),
+        SheetsConfig.getSheetName("dashboard"),
       ];
 
       // Create missing sheets
@@ -99,6 +100,7 @@ export class GoogleSheetsAdapter {
       await this.setupReferenceData();
       await this.setupSheetHeaders("config");
       await this.setupSheetHeaders("tempBills");
+      await this.setupDashboard();
 
       return {
         spreadsheetId: this.spreadsheetId,
@@ -128,6 +130,9 @@ export class GoogleSheetsAdapter {
     }
     if (sheetName === SheetsConfig.getSheetName("tempBills")) {
       return "tempBills";
+    }
+    if (sheetName === SheetsConfig.getSheetName("dashboard")) {
+      return "dashboard";
     }
 
     throw new Error(`Unknown sheet name: ${sheetName}`);
@@ -164,6 +169,8 @@ export class GoogleSheetsAdapter {
       // Reference sheet with sections - handled separately
       if (sheetKey === "reference") {
         await this.setupReferenceData();
+      } else if (sheetKey === "dashboard") {
+        await this.setupDashboard();
       }
     }
 
@@ -722,6 +729,456 @@ export class GoogleSheetsAdapter {
     } catch (error) {
       console.error("Error formatting Reference sheet:", error);
       // Don't throw error - formatting is optional
+    }
+  }
+
+  async setupDashboard() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    const sheetName = SheetsConfig.getSheetName("dashboard");
+    const config = SheetsConfig.SHEETS.dashboard;
+
+    if (!config.sections) {
+      throw new Error("Dashboard configuration sections not found");
+    }
+
+    try {
+      // Setup section titles
+      for (const section of config.sections) {
+        const titleRange = SheetsConfig.getSectionHeaderRange(section, 1);
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${titleRange}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [[section.title]],
+          },
+        });
+      }
+
+      // Setup column headers
+      for (const section of config.sections) {
+        const headerRange = SheetsConfig.getSectionHeaderRange(section, 2);
+        const headers = section.fields.map((field) => field.name);
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${headerRange}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [headers],
+          },
+        });
+      }
+
+      // Setup configuration data (only Year now)
+      const configSection = config.sections.find(
+        (s) => s.title === "⚙️ CONFIGURATION"
+      );
+      if (configSection && SheetsConfig.DEFAULT_DATA.dashboard?.configuration) {
+        const configRange = SheetsConfig.getSectionDataRange(configSection, 3);
+        const endRow =
+          3 + SheetsConfig.DEFAULT_DATA.dashboard.configuration.length - 1;
+        const fullRange = `${sheetName}!${configSection.startColumn}3:${configSection.endColumn}${endRow}`;
+
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: fullRange,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: SheetsConfig.DEFAULT_DATA.dashboard.configuration,
+          },
+        });
+      }
+
+      // Setup account balances with formulas for real-time calculation
+      await this.setupAccountBalancesWithFormulas();
+
+      // Apply beautiful formatting
+      await this.formatDashboardSheet(this.spreadsheetId, sheetName);
+
+      console.log("Dashboard sheet setup completed successfully");
+    } catch (error) {
+      console.error("Error setting up dashboard:", error);
+      throw error;
+    }
+  }
+
+  async setupAccountBalancesWithFormulas() {
+    const sheetName = SheetsConfig.getSheetName("dashboard");
+    const config = SheetsConfig.SHEETS.dashboard;
+
+    if (!config.sections) return;
+
+    const balanceSection = config.sections.find(
+      (s) => s.title === "💰 ACCOUNT BALANCES"
+    );
+    if (!balanceSection) return;
+
+    try {
+      // Get all accounts from reference sheet
+      const allAccounts = await this.getAccounts();
+      console.log(`Setting up formulas for ${allAccounts.length} accounts`);
+
+      // Clear existing data first (clear up to 10 rows to be safe)
+      const clearRange = `${sheetName}!${balanceSection.startColumn}3:${balanceSection.endColumn}12`;
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: this.spreadsheetId,
+        range: clearRange,
+      });
+
+      // Setup account data with formulas for real-time balance calculation
+      const accountData = [];
+      for (let i = 0; i < allAccounts.length && i < 8; i++) {
+        const account = allAccounts[i];
+        const rowNum = 3 + i; // Starting from row 3
+
+        // Create formula to calculate balance from Bills sheet dynamically
+        // Formula will reference the year from configuration cell B3
+        const balanceFormula = `=SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),"${account.name}",INDIRECT("'Bills_"&$B$3&"'!G:G"),"Income")-SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),"${account.name}",INDIRECT("'Bills_"&$B$3&"'!G:G"),"Expense")+SUMIFS(INDIRECT("'Bills_"&$B$3&"'!J:J"),INDIRECT("'Bills_"&$B$3&"'!I:I"),"${account.name}",INDIRECT("'Bills_"&$B$3&"'!G:G"),"Transfer")`;
+
+        accountData.push([
+          `${account.emoji} ${account.name}`,
+          account.currency,
+          balanceFormula,
+        ]);
+      }
+
+      if (accountData.length > 0) {
+        const endRow = 3 + accountData.length - 1;
+        const fullRange = `${sheetName}!${balanceSection.startColumn}3:${balanceSection.endColumn}${endRow}`;
+
+        console.log(
+          `Writing account data with formulas to range: ${fullRange}`
+        );
+
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: fullRange,
+          valueInputOption: "USER_ENTERED", // Important: Use USER_ENTERED for formulas
+          requestBody: {
+            values: accountData,
+          },
+        });
+
+        console.log("Account balances with formulas setup successfully");
+      } else {
+        console.log("No accounts found to process");
+      }
+    } catch (error) {
+      console.error("Error refreshing account balances:", error);
+    }
+  }
+
+  async getSelectedYear(): Promise<number> {
+    const sheetName = SheetsConfig.getSheetName("dashboard");
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!B3`, // Year value cell
+      });
+
+      const year = response.data.values?.[0]?.[0];
+      return year ? parseInt(year) : new Date().getFullYear();
+    } catch (error) {
+      return new Date().getFullYear();
+    }
+  }
+
+  async calculateAccountBalance(accountId: string, year: number) {
+    const sheetName = SheetsConfig.getSheetName("bills", { year });
+
+    try {
+      // Check if the yearly sheet exists first
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+
+      const sheetExists = spreadsheetInfo.data.sheets.some(
+        (sheet: any) => sheet.properties.title === sheetName
+      );
+
+      if (!sheetExists) {
+        console.log(`Bills sheet for year ${year} doesn't exist yet`);
+        return { income: 0, expenses: 0, transfersIn: 0, balance: 0 };
+      }
+
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A:R`,
+      });
+
+      const rows = response.data.values || [];
+      if (rows.length <= 1) {
+        console.log(`No data found in ${sheetName}`);
+        return { income: 0, expenses: 0, transfersIn: 0, balance: 0 };
+      }
+
+      const headers = rows[0];
+      const accountColumnIndex = headers.findIndex(
+        (h: string) => h === "Account"
+      );
+      const destinationAccountColumnIndex = headers.findIndex(
+        (h: string) => h === "Destination Account"
+      );
+      const amountColumnIndex = headers.findIndex(
+        (h: string) => h === "Amount"
+      );
+      const destinationAmountColumnIndex = headers.findIndex(
+        (h: string) => h === "Destination Amount"
+      );
+      const transactionTypeColumnIndex = headers.findIndex(
+        (h: string) => h === "Transaction Type"
+      );
+
+      if (
+        accountColumnIndex === -1 ||
+        amountColumnIndex === -1 ||
+        transactionTypeColumnIndex === -1
+      ) {
+        console.log(`Required columns not found in ${sheetName}`);
+        return { income: 0, expenses: 0, transfersIn: 0, balance: 0 };
+      }
+
+      let income = 0;
+      let expenses = 0;
+      let transfersIn = 0;
+      let transactionCount = 0;
+
+      // Process each transaction
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const account = row[accountColumnIndex]?.toString().trim();
+        const destinationAccount = row[destinationAccountColumnIndex]
+          ?.toString()
+          .trim();
+        const amount = parseFloat(row[amountColumnIndex]) || 0;
+        const destinationAmount =
+          parseFloat(row[destinationAmountColumnIndex]) || amount;
+        const transactionType = row[transactionTypeColumnIndex]
+          ?.toString()
+          .toLowerCase()
+          .trim();
+
+        // Skip if no amount or invalid transaction
+        if (!amount || !account || !transactionType) continue;
+
+        // Money going out of this account
+        if (account === accountId) {
+          transactionCount++;
+          if (transactionType === "income") {
+            income += amount;
+          } else if (transactionType === "expense") {
+            expenses += amount;
+          } else if (transactionType === "transfer") {
+            // Transfer out counted as expense
+            expenses += amount;
+          }
+        }
+
+        // Money coming into this account (transfers)
+        if (
+          destinationAccount === accountId &&
+          transactionType === "transfer"
+        ) {
+          transfersIn += destinationAmount;
+        }
+      }
+
+      const balance = income + transfersIn - expenses;
+
+      console.log(
+        `Account ${accountId}: ${transactionCount} transactions, Income: ${income}, Expenses: ${expenses}, Transfers In: ${transfersIn}, Balance: ${balance}`
+      );
+
+      return {
+        income: Math.round(income * 100) / 100,
+        expenses: Math.round(expenses * 100) / 100,
+        transfersIn: Math.round(transfersIn * 100) / 100,
+        balance: Math.round(balance * 100) / 100,
+      };
+    } catch (error) {
+      console.error(
+        `Error calculating balance for account ${accountId}:`,
+        error
+      );
+      return { income: 0, expenses: 0, transfersIn: 0, balance: 0 };
+    }
+  }
+
+  async formatDashboardSheet(spreadsheetId: string, sheetName: string) {
+    try {
+      const sheetId = await this.getSheetId(sheetName);
+      const config = SheetsConfig.SHEETS.dashboard;
+
+      if (!config.sections) return;
+
+      const requests = [];
+
+      // Format each section
+      for (const section of config.sections) {
+        const startCol = SheetsConfig.columnToNumber(section.startColumn) - 1;
+        const endCol = SheetsConfig.columnToNumber(section.endColumn);
+
+        // Section title formatting
+        requests.push({
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: section.color.title,
+                textFormat: { bold: true, fontSize: 14 },
+                horizontalAlignment: "LEFT",
+                borders: {
+                  top: {
+                    style: "SOLID",
+                    width: 3,
+                    color: section.color.border,
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 2,
+                    color: section.color.border,
+                  },
+                  left: {
+                    style: "SOLID",
+                    width: 3,
+                    color: section.color.border,
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 3,
+                    color: section.color.border,
+                  },
+                },
+              },
+            },
+            fields:
+              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
+          },
+        });
+
+        // Section headers formatting
+        requests.push({
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 1,
+              endRowIndex: 2,
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: section.color.header,
+                textFormat: { bold: true, fontSize: 11 },
+                horizontalAlignment: "CENTER",
+                borders: {
+                  top: {
+                    style: "SOLID",
+                    width: 1,
+                    color: section.color.border,
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 2,
+                    color: section.color.border,
+                  },
+                  left: {
+                    style: "SOLID",
+                    width: 2,
+                    color: section.color.border,
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 1,
+                    color: section.color.border,
+                  },
+                },
+              },
+            },
+            fields:
+              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
+          },
+        });
+
+        // Data area borders
+        requests.push({
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 2,
+              endRowIndex: 20, // Extended range for data
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: "LEFT",
+                borders: {
+                  left: {
+                    style: "SOLID",
+                    width: 2,
+                    color: section.color.border,
+                  },
+                  right: {
+                    style: "SOLID",
+                    width: 1,
+                    color: section.color.border,
+                  },
+                  top: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.8, green: 0.8, blue: 0.8 },
+                  },
+                  bottom: {
+                    style: "SOLID",
+                    width: 1,
+                    color: { red: 0.8, green: 0.8, blue: 0.8 },
+                  },
+                },
+              },
+            },
+            fields: "userEnteredFormat(horizontalAlignment,borders)",
+          },
+        });
+      }
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests },
+      });
+
+      console.log(
+        "Dashboard sheet formatted successfully with beautiful colors"
+      );
+    } catch (error) {
+      console.error("Error formatting Dashboard sheet:", error);
+    }
+  }
+
+  async updateDashboard() {
+    try {
+      // With formula-based calculations, the dashboard updates automatically
+      // We can just re-setup the account balances formulas if needed
+      await this.setupAccountBalancesWithFormulas();
+      console.log("Dashboard data updated successfully");
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating dashboard:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
@@ -1942,6 +2399,63 @@ export class GoogleSheetsAdapter {
       return { success: true };
     } catch (error) {
       console.error(`Error copying bill #${billId} to TempBills:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Demo method to showcase the dashboard functionality
+   * This method demonstrates how to:
+   * 1. Initialize the dashboard
+   * 2. Set year configuration
+   * 3. Setup account formulas for real-time balance calculation
+   * 4. Get dashboard data
+   */
+  async dashboardDemo() {
+    try {
+      console.log("🚀 Starting Dashboard Demo...");
+
+      // 1. Initialize or update dashboard
+      await this.setupDashboard();
+      console.log("✅ Dashboard initialized");
+
+      // 2. Update dashboard with current data
+      await this.updateDashboard();
+      console.log("✅ Dashboard data refreshed");
+
+      // 3. Get current dashboard information
+      const selectedYear = await this.getSelectedYear();
+      const accounts = await this.getAccounts();
+
+      console.log(`📅 Selected Year: ${selectedYear}`);
+      console.log(`💳 Accounts Found: ${accounts.length}`);
+
+      // 4. Display account info (balances are now calculated by formulas in real-time)
+      for (const account of accounts) {
+        console.log(
+          `${account.emoji} ${account.name}: ${account.currency} (balance calculated by formula)`
+        );
+      }
+
+      return {
+        success: true,
+        message: "Dashboard demo completed successfully!",
+        dashboardUrl: `https://docs.google.com/spreadsheets/d/${this.spreadsheetId}/edit#gid=0`,
+        data: {
+          selectedYear,
+          accountCount: accounts.length,
+          accounts: accounts.map((acc: any) => ({
+            name: acc.name,
+            emoji: acc.emoji,
+            currency: acc.currency,
+          })),
+        },
+      };
+    } catch (error) {
+      console.error("❌ Dashboard demo failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),

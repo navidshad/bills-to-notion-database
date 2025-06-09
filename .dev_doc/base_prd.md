@@ -53,3 +53,9 @@ charts (based on a year selector)
 1. monthly comparison over expenses and income
 2. this month expense categories share
 
+## cleanup
+I came accrose `getTransactionTypeName` and `getTransactionTypeEmoji` by chance which has been defined multiple times in different script with same porpose, I want to have single source of truth for theme. 
+also there might be similar repeatation for other functions. 
+
+help to cleanup these kind of reapeatation first 
+first let's do an analize other the source code 

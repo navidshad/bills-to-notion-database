@@ -159,6 +159,47 @@ export class SheetsConfig {
         { name: "Description", type: "string" },
       ],
     },
+    dashboard: {
+      name: "Dashboard",
+      gridProperties: {
+        rowCount: 100,
+        columnCount: 15,
+      },
+      sections: [
+        {
+          title: "⚙️ CONFIGURATION",
+          emoji: "⚙️",
+          startColumn: "A",
+          endColumn: "C",
+          fields: [
+            { name: "Setting", type: "string", required: true },
+            { name: "Value", type: "string", required: true },
+            { name: "Description", type: "string" },
+          ],
+          color: {
+            title: { red: 0.9, green: 0.85, blue: 1 },
+            header: { red: 0.95, green: 0.9, blue: 1 },
+            border: { red: 0.5, green: 0.2, blue: 0.8 },
+          },
+        },
+        {
+          title: "💰 ACCOUNT BALANCES",
+          emoji: "💰",
+          startColumn: "G",
+          endColumn: "I",
+          fields: [
+            { name: "Account", type: "string", required: true },
+            { name: "Currency", type: "currency", required: true },
+            { name: "Balance", type: "number" },
+          ],
+          color: {
+            title: { red: 0.7, green: 0.95, blue: 0.7 },
+            header: { red: 0.8, green: 0.98, blue: 0.8 },
+            border: { red: 0.1, green: 0.7, blue: 0.1 },
+          },
+        },
+      ],
+    },
   };
 
   // Default data for sheets
@@ -196,6 +237,15 @@ export class SheetsConfig {
       ["timezone", "UTC", "Default timezone"],
       ["date_format", "YYYY-MM-DD", "Date format preference"],
     ],
+    dashboard: {
+      configuration: [
+        [
+          "Year",
+          new Date().getFullYear().toString(),
+          "Selected year for analysis",
+        ],
+      ],
+    },
   };
 
   // Helper methods for coordinate calculations
