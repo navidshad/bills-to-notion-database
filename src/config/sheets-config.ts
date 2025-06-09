@@ -43,10 +43,10 @@ export interface SheetSection {
   title: string;
   table: SectionTable;
   color: {
-    title: { red: number; green: number; blue: number };
-    header: { red: number; green: number; blue: number };
-    border: { red: number; green: number; blue: number };
-    data?: { red: number; green: number; blue: number }; // optional data background
+    title: { red: number; green: number; blue: number }; // Section title background
+    header: { red: number; green: number; blue: number }; // Column headers background
+    border: { red: number; green: number; blue: number }; // Section outline border color
+    data?: { red: number; green: number; blue: number }; // Optional data area background (defaults to white)
   };
   spacing?: SectionSpacing;
   merging?: SectionMerging;

@@ -262,40 +262,60 @@ export class GoogleSheetsAdapter {
     }
 
     // Add visual formatting with colored borders and background
-    await this.formatReferenceSheet(this.spreadsheetId, sheetName);
+    await this.formatSheet("reference");
   }
 
-  async formatReferenceSheet(spreadsheetId: string, sheetName: string) {
+  /**
+   * General formatter method for any sheet with grid configuration
+   *
+   * New Clean Styling Approach:
+   * - Section-level borders only (no inner cell borders)
+   * - Clean data areas with minimal visual clutter
+   * - Strong section boundaries for clear organization
+   * - Beautiful color-coded sections based on configuration
+   *
+   * Benefits:
+   * - More readable and professional appearance
+   * - Reduced visual noise in data areas
+   * - Consistent styling across all sheets
+   * - Easy to maintain and extend
+   */
+  async formatSheet(sheetKey: string) {
     try {
+      if (!this.spreadsheetId) {
+        throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+      }
+
+      const config = SheetsConfig.SHEETS[sheetKey];
+      if (!config?.grid) {
+        console.warn(`Sheet ${sheetKey} has no grid configuration`);
+        return;
+      }
+
+      const sheetName = SheetsConfig.getSheetName(sheetKey);
       const sheetId = await this.getSheetId(sheetName);
-      const config = SheetsConfig.SHEETS.reference;
-
-      if (!config.grid) return;
-
       const requests = [];
 
       // Calculate positions first
       SheetsConfig.calculateSectionPositions(config.grid);
 
-      // Format each section using calculated coordinates from section definitions
-      const allSections = SheetsConfig.getAllSections("reference");
+      // Format each section using calculated coordinates
+      const allSections = SheetsConfig.getAllSections(sheetKey);
       for (const section of allSections) {
         if (!section._calculated) continue;
 
-        // Use calculated coordinates from the section definitions
+        // Convert to 0-based indices for Google Sheets API
         const startCol =
           SheetsConfig.columnToNumber(section._calculated.startColumn) - 1;
         const endCol = SheetsConfig.columnToNumber(
           section._calculated.endColumn
         );
-
-        // Calculate row positions based on section structure
-        const titleRow = section._calculated.startRow - 1; // Convert to 0-based index
+        const titleRow = section._calculated.startRow - 1;
         const headerRow = titleRow + 1;
         const dataStartRow = headerRow + 1;
-        const dataEndRow = section._calculated.endRow - 1; // Convert to 0-based index
+        const dataEndRow = section._calculated.endRow - 1;
 
-        // Section title formatting - use colors from section definition
+        // 1. Format section title with top and side borders
         requests.push({
           repeatCell: {
             range: {
@@ -316,11 +336,6 @@ export class GoogleSheetsAdapter {
                     width: 3,
                     color: section.color.border,
                   },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
                   left: {
                     style: "SOLID",
                     width: 3,
@@ -331,6 +346,11 @@ export class GoogleSheetsAdapter {
                     width: 3,
                     color: section.color.border,
                   },
+                  bottom: {
+                    style: "SOLID",
+                    width: 1,
+                    color: section.color.border,
+                  },
                 },
               },
             },
@@ -339,7 +359,7 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Section headers formatting - use colors from section definition
+        // 2. Format section headers with side borders and bottom separator
         requests.push({
           repeatCell: {
             range: {
@@ -356,22 +376,17 @@ export class GoogleSheetsAdapter {
                 horizontalAlignment: "CENTER",
                 wrapStrategy: "CLIP",
                 borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: section.color.border,
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
                   left: {
                     style: "SOLID",
-                    width: 2,
+                    width: 3,
                     color: section.color.border,
                   },
                   right: {
+                    style: "SOLID",
+                    width: 3,
+                    color: section.color.border,
+                  },
+                  bottom: {
                     style: "SOLID",
                     width: 2,
                     color: section.color.border,
@@ -384,7 +399,7 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        // Data area borders - use calculated coordinates and section colors
+        // 3. Format data area with clean background, no inner borders
         requests.push({
           repeatCell: {
             range: {
@@ -396,39 +411,65 @@ export class GoogleSheetsAdapter {
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: section.color.data || undefined, // Use section data color if defined
+                backgroundColor: section.color.data || {
+                  red: 1.0,
+                  green: 1.0,
+                  blue: 1.0,
+                },
                 horizontalAlignment: "LEFT",
                 wrapStrategy: "CLIP",
-                borders: {
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.8, green: 0.8, blue: 0.8 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                },
+                // No inner borders - clean look
               },
             },
             fields:
-              "userEnteredFormat(backgroundColor,horizontalAlignment,wrapStrategy,borders)",
+              "userEnteredFormat(backgroundColor,horizontalAlignment,wrapStrategy)",
           },
         });
 
-        // Make the first column (ID/# column) narrower for each section
+        // 4. Add section boundary borders (outline only)
+        // Left border for data area
+        requests.push({
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: dataStartRow,
+              endRowIndex: dataEndRow + 1,
+              startColumnIndex: startCol,
+              endColumnIndex: startCol + 1,
+            },
+            left: { style: "SOLID", width: 3, color: section.color.border },
+          },
+        });
+
+        // Right border for data area
+        requests.push({
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: dataStartRow,
+              endRowIndex: dataEndRow + 1,
+              startColumnIndex: endCol - 1,
+              endColumnIndex: endCol,
+            },
+            right: { style: "SOLID", width: 3, color: section.color.border },
+          },
+        });
+
+        // Bottom border for data area
+        requests.push({
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: dataEndRow,
+              endRowIndex: dataEndRow + 1,
+              startColumnIndex: startCol,
+              endColumnIndex: endCol,
+            },
+            bottom: { style: "SOLID", width: 3, color: section.color.border },
+          },
+        });
+
+        // 5. Make the first column (ID/# column) narrower if applicable
         if (section.table.fields[0]?.name === "#") {
           requests.push({
             updateDimensionProperties: {
@@ -445,16 +486,19 @@ export class GoogleSheetsAdapter {
         }
       }
 
-      await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests },
-      });
+      // Execute all formatting requests
+      if (requests.length > 0) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: { requests },
+        });
+      }
 
       console.log(
-        "Reference sheet formatted successfully using section-defined coordinates and colors"
+        `Sheet ${sheetName} formatted successfully with clean section borders`
       );
     } catch (error) {
-      console.error("Error formatting reference sheet:", error);
+      console.error(`Error formatting sheet ${sheetKey}:`, error);
     }
   }
 
@@ -573,7 +617,7 @@ export class GoogleSheetsAdapter {
       await this.createExpenseComparisonPieChart();
 
       // Apply beautiful formatting
-      await this.formatDashboardSheet(this.spreadsheetId, sheetName);
+      await this.formatSheet("dashboard");
 
       console.log("Dashboard sheet setup completed successfully");
     } catch (error) {
@@ -1039,181 +1083,6 @@ export class GoogleSheetsAdapter {
         error
       );
       return { income: 0, expenses: 0, transfersIn: 0, balance: 0 };
-    }
-  }
-
-  async formatDashboardSheet(spreadsheetId: string, sheetName: string) {
-    try {
-      const sheetId = await this.getSheetId(sheetName);
-      const config = SheetsConfig.SHEETS.dashboard;
-
-      if (!config.grid) return;
-
-      const requests = [];
-
-      // Calculate positions first
-      SheetsConfig.calculateSectionPositions(config.grid);
-
-      // Format each section using calculated coordinates from section definitions
-      const allSections = SheetsConfig.getAllSections("dashboard");
-      for (const section of allSections) {
-        if (!section._calculated) continue;
-
-        // Use calculated coordinates from the section definitions
-        const startCol =
-          SheetsConfig.columnToNumber(section._calculated.startColumn) - 1;
-        const endCol = SheetsConfig.columnToNumber(
-          section._calculated.endColumn
-        );
-
-        // Calculate row positions based on section structure
-        const titleRow = section._calculated.startRow - 1; // Convert to 0-based index
-        const headerRow = titleRow + 1;
-        const dataStartRow = headerRow + 1;
-        const dataEndRow = section._calculated.endRow - 1; // Convert to 0-based index
-
-        // Section title formatting - use colors from section definition
-        requests.push({
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: titleRow,
-              endRowIndex: titleRow + 1,
-              startColumnIndex: startCol,
-              endColumnIndex: endCol,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: section.color.title,
-                textFormat: { bold: true, fontSize: 14 },
-                horizontalAlignment: "LEFT",
-                borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 3,
-                    color: section.color.border,
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  left: {
-                    style: "SOLID",
-                    width: 3,
-                    color: section.color.border,
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 3,
-                    color: section.color.border,
-                  },
-                },
-              },
-            },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
-          },
-        });
-
-        // Section headers formatting - use colors from section definition
-        requests.push({
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: headerRow,
-              endRowIndex: headerRow + 1,
-              startColumnIndex: startCol,
-              endColumnIndex: endCol,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: section.color.header,
-                textFormat: { bold: true, fontSize: 11 },
-                horizontalAlignment: "CENTER",
-                borders: {
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: section.color.border,
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 1,
-                    color: section.color.border,
-                  },
-                },
-              },
-            },
-            fields:
-              "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,borders)",
-          },
-        });
-
-        // Data area borders - use calculated coordinates and section colors
-        requests.push({
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: dataStartRow,
-              endRowIndex: dataEndRow + 1,
-              startColumnIndex: startCol,
-              endColumnIndex: endCol,
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: section.color.data || undefined, // Use section data color if defined
-                horizontalAlignment: "LEFT",
-                borders: {
-                  left: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  right: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                  top: {
-                    style: "SOLID",
-                    width: 1,
-                    color: { red: 0.8, green: 0.8, blue: 0.8 },
-                  },
-                  bottom: {
-                    style: "SOLID",
-                    width: 2,
-                    color: section.color.border,
-                  },
-                },
-              },
-            },
-            fields:
-              "userEnteredFormat(backgroundColor,horizontalAlignment,borders)",
-          },
-        });
-      }
-
-      await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests },
-      });
-
-      console.log(
-        "Dashboard sheet formatted successfully using section-defined coordinates and colors"
-      );
-    } catch (error) {
-      console.error("Error formatting Dashboard sheet:", error);
     }
   }
 
