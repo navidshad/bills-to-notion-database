@@ -179,8 +179,8 @@ export class SheetsConfig {
         {
           title: "⚙️ CONFIGURATION",
           emoji: "⚙️",
-          startColumn: "A",
-          endColumn: "C",
+          startColumn: "H",
+          endColumn: "J",
           fields: [
             { name: "Setting", type: "string", required: true },
             { name: "Value", type: "string", required: true },
@@ -195,8 +195,8 @@ export class SheetsConfig {
         {
           title: "💰 ACCOUNT BALANCES",
           emoji: "💰",
-          startColumn: "A",
-          endColumn: "C",
+          startColumn: "H",
+          endColumn: "J",
           fields: [
             { name: "Account", type: "string", required: true },
             { name: "Currency", type: "currency", required: true },

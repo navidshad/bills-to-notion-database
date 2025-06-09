@@ -897,12 +897,9 @@ export class GoogleSheetsAdapter {
     if (!balanceSection) return;
 
     try {
-      // Get all accounts from reference sheet up to the limit
-      const allAccounts = await this.getAccounts();
       const maxAccounts = SheetsConfig.LIMITS.MAX_ACCOUNTS;
-      const accountsToProcess = allAccounts.slice(0, maxAccounts);
       console.log(
-        `Setting up formulas for ${accountsToProcess.length} accounts (max ${maxAccounts})`
+        `Setting up dynamic formulas for up to ${maxAccounts} accounts from Reference sheet`
       );
 
       // Clear existing data first (clear all account rows)
@@ -920,23 +917,26 @@ export class GoogleSheetsAdapter {
         TRANSFER: "Transfer",
       };
 
-      // Setup account data with formulas for real-time balance calculation
+      // Setup account data with formulas that reference the Reference sheet dynamically
       const accountData = [];
-      for (let i = 0; i < accountsToProcess.length; i++) {
-        const account = accountsToProcess[i];
+      for (let i = 0; i < maxAccounts; i++) {
         const currentRow = 9 + i; // Starting from row 9 (after title and headers at rows 7-8)
+        const referenceRow = 3 + i; // Reference sheet accounts start from row 3
 
-        // Create formula to calculate balance from Bills sheet dynamically
-        // Formula references:
-        // - Year from configuration cell B3
-        // - Account name extracted from current row (A9, A10, etc.) by removing emoji
-        // - Transaction types from constants
-        const balanceFormula = `=SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),TRIM(MID(A${currentRow},FIND(" ",A${currentRow})+1,LEN(A${currentRow}))),INDIRECT("'Bills_"&$B$3&"'!G:G"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&$B$3&"'!D:D"),INDIRECT("'Bills_"&$B$3&"'!H:H"),TRIM(MID(A${currentRow},FIND(" ",A${currentRow})+1,LEN(A${currentRow}))),INDIRECT("'Bills_"&$B$3&"'!G:G"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&$B$3&"'!J:J"),INDIRECT("'Bills_"&$B$3&"'!I:I"),TRIM(MID(A${currentRow},FIND(" ",A${currentRow})+1,LEN(A${currentRow}))),INDIRECT("'Bills_"&$B$3&"'!G:G"),"${TRANSACTION_TYPES.TRANSFER}")`;
+        // Account name formula: =IF(Reference!I{referenceRow}<>"", Reference!J{referenceRow}&" "&Reference!I{referenceRow}, "")
+        const accountNameFormula = `=IF(Reference!I${referenceRow}<>"", Reference!J${referenceRow}&" "&Reference!I${referenceRow}, "")`;
+
+        // Currency formula: =IF(Reference!I{referenceRow}<>"", Reference!K{referenceRow}, "")
+        const currencyFormula = `=IF(Reference!I${referenceRow}<>"", Reference!K${referenceRow}, "")`;
+
+        // Balance formula that uses the account name from the reference sheet
+        // We extract the account name from the Reference sheet directly, not from the current cell
+        const balanceFormula = `=IF(Reference!I${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&$I$3&"'!D:D"),INDIRECT("'Bills_"&$I$3&"'!H:H"),Reference!I${referenceRow},INDIRECT("'Bills_"&$I$3&"'!G:G"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&$I$3&"'!D:D"),INDIRECT("'Bills_"&$I$3&"'!H:H"),Reference!I${referenceRow},INDIRECT("'Bills_"&$I$3&"'!G:G"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&$I$3&"'!J:J"),INDIRECT("'Bills_"&$I$3&"'!I:I"),Reference!I${referenceRow},INDIRECT("'Bills_"&$I$3&"'!G:G"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
 
         accountData.push([
-          `${account.emoji} ${account.name}`, // Display name with emoji
-          account.currency,
-          balanceFormula,
+          accountNameFormula, // Dynamic account name with emoji from Reference!J&I
+          currencyFormula, // Dynamic currency from Reference!K
+          balanceFormula, // Dynamic balance calculation using Reference!I (account name)
         ]);
       }
 
@@ -944,9 +944,7 @@ export class GoogleSheetsAdapter {
         const endRow = 9 + accountData.length - 1;
         const fullRange = `${sheetName}!${balanceSection.startColumn}9:${balanceSection.endColumn}${endRow}`;
 
-        console.log(
-          `Writing account data with formulas to range: ${fullRange}`
-        );
+        console.log(`Writing dynamic account formulas to range: ${fullRange}`);
 
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
@@ -957,9 +955,11 @@ export class GoogleSheetsAdapter {
           },
         });
 
-        console.log("Account balances with formulas setup successfully");
+        console.log(
+          "Dynamic account balances with formulas setup successfully"
+        );
       } else {
-        console.log("No accounts found to process");
+        console.log("No account formulas to process");
       }
     } catch (error) {
       console.error("Error setting up account balances with formulas:", error);
@@ -971,7 +971,7 @@ export class GoogleSheetsAdapter {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!B3`, // Year value cell
+        range: `${sheetName}!I3`, // Year value cell (moved from B3 to I3)
       });
 
       const year = response.data.values?.[0]?.[0];
@@ -1113,18 +1113,45 @@ export class GoogleSheetsAdapter {
 
       const requests = [];
 
+      // Define row ranges for each section
+      const sectionRowRanges: Record<
+        string,
+        {
+          startRow: number;
+          headerRow: number;
+          dataStartRow: number;
+          dataEndRow: number;
+        }
+      > = {
+        "⚙️ CONFIGURATION": {
+          startRow: 0,
+          headerRow: 1,
+          dataStartRow: 2,
+          dataEndRow: 6,
+        },
+        "💰 ACCOUNT BALANCES": {
+          startRow: 6,
+          headerRow: 7,
+          dataStartRow: 8,
+          dataEndRow: 25,
+        },
+      };
+
       // Format each section
       for (const section of config.sections) {
         const startCol = SheetsConfig.columnToNumber(section.startColumn) - 1;
         const endCol = SheetsConfig.columnToNumber(section.endColumn);
+        const rowRange = sectionRowRanges[section.title];
+
+        if (!rowRange) continue;
 
         // Section title formatting
         requests.push({
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 1,
+              startRowIndex: rowRange.startRow,
+              endRowIndex: rowRange.startRow + 1,
               startColumnIndex: startCol,
               endColumnIndex: endCol,
             },
@@ -1167,8 +1194,8 @@ export class GoogleSheetsAdapter {
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: 1,
-              endRowIndex: 2,
+              startRowIndex: rowRange.headerRow,
+              endRowIndex: rowRange.headerRow + 1,
               startColumnIndex: startCol,
               endColumnIndex: endCol,
             },
@@ -1211,8 +1238,8 @@ export class GoogleSheetsAdapter {
           repeatCell: {
             range: {
               sheetId: sheetId,
-              startRowIndex: 2,
-              endRowIndex: 20, // Extended range for data
+              startRowIndex: rowRange.dataStartRow,
+              endRowIndex: rowRange.dataEndRow,
               startColumnIndex: startCol,
               endColumnIndex: endCol,
             },
