@@ -1,4 +1,9 @@
 import { google } from "googleapis";
+import {
+  SheetsConfig,
+  SheetConfiguration,
+  SheetSection,
+} from "../config/sheets-config";
 
 export class GoogleSheetsAdapter {
   spreadsheetId: string | undefined;
@@ -51,11 +56,14 @@ export class GoogleSheetsAdapter {
       const existingSheets = spreadsheetInfo.data.sheets.map(
         (sheet: any) => sheet.properties.title
       );
+
+      // Generate required sheet names using configuration
+      const currentYear = new Date().getFullYear();
       const requiredSheets = [
-        `Bills_${new Date().getFullYear()}`,
-        "Reference",
-        "Config",
-        "TempBills",
+        SheetsConfig.getSheetName("bills", { year: currentYear }),
+        SheetsConfig.getSheetName("reference"),
+        SheetsConfig.getSheetName("config"),
+        SheetsConfig.getSheetName("tempBills"),
       ];
 
       // Create missing sheets
@@ -66,30 +74,19 @@ export class GoogleSheetsAdapter {
       if (sheetsToCreate.length > 0) {
         console.log(`Creating missing sheets: ${sheetsToCreate.join(", ")}`);
 
-        const requests = sheetsToCreate.map((sheetName) => ({
-          addSheet: {
-            properties: {
-              title: sheetName,
-              gridProperties: {
-                rowCount: sheetName.startsWith("Bills_")
-                  ? 1000
-                  : sheetName === "Categories"
-                  ? 100
-                  : sheetName === "TempBills"
-                  ? 100
-                  : 50,
-                columnCount:
-                  sheetName === "TempBills"
-                    ? 15
-                    : sheetName.startsWith("Bills_")
-                    ? 20
-                    : sheetName === "Reference"
-                    ? 17 // Categories(5) + Divider(1) + Accounts(5) + Divider(1) + IncomeSources(5)
-                    : 3, // Config sheet: Setting, Value, Description
+        const requests = sheetsToCreate.map((sheetName) => {
+          const sheetKey = this.getSheetKeyByName(sheetName);
+          const config = SheetsConfig.SHEETS[sheetKey];
+
+          return {
+            addSheet: {
+              properties: {
+                title: sheetName,
+                gridProperties: config.gridProperties,
               },
             },
-          },
-        }));
+          };
+        });
 
         await this.sheets.spreadsheets.batchUpdate({
           spreadsheetId: this.spreadsheetId,
@@ -98,10 +95,10 @@ export class GoogleSheetsAdapter {
       }
 
       // Set up headers and data for all required sheets
-      await this.setupBillsHeaders(this.spreadsheetId);
-      await this.setupReferenceData(this.spreadsheetId);
-      await this.setupConfigData(this.spreadsheetId);
-      await this.setupTempBillsHeaders(this.spreadsheetId);
+      await this.setupSheetHeaders("bills", currentYear);
+      await this.setupReferenceData();
+      await this.setupSheetHeaders("config");
+      await this.setupSheetHeaders("tempBills");
 
       return {
         spreadsheetId: this.spreadsheetId,
@@ -115,183 +112,146 @@ export class GoogleSheetsAdapter {
     }
   }
 
+  private getSheetKeyByName(sheetName: string): string {
+    const currentYear = new Date().getFullYear();
+
+    if (
+      sheetName === SheetsConfig.getSheetName("bills", { year: currentYear })
+    ) {
+      return "bills";
+    }
+    if (sheetName === SheetsConfig.getSheetName("reference")) {
+      return "reference";
+    }
+    if (sheetName === SheetsConfig.getSheetName("config")) {
+      return "config";
+    }
+    if (sheetName === SheetsConfig.getSheetName("tempBills")) {
+      return "tempBills";
+    }
+
+    throw new Error(`Unknown sheet name: ${sheetName}`);
+  }
+
+  async setupSheetHeaders(sheetKey: string, year?: number) {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    const config = SheetsConfig.SHEETS[sheetKey];
+    if (!config) {
+      throw new Error(`Sheet configuration "${sheetKey}" not found`);
+    }
+
+    // Get sheet name with variables
+    const variables = year ? { year } : {};
+    const sheetName = SheetsConfig.getSheetName(sheetKey, variables);
+
+    if (config.fields) {
+      // Standard sheet with fields
+      const headers = SheetsConfig.getFieldHeaders(sheetKey);
+      const range = `${sheetName}!${SheetsConfig.getHeadersRange(config)}`;
+
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [headers],
+        },
+      });
+    } else if (config.sections) {
+      // Reference sheet with sections - handled separately
+      if (sheetKey === "reference") {
+        await this.setupReferenceData();
+      }
+    }
+
+    console.log(`Headers set up for ${sheetName}`);
+  }
+
   async setupBillsHeaders(spreadsheetId: string) {
     const currentYear = new Date().getFullYear();
-    const headers = [
-      "ID",
-      "Date",
-      "Title/Description",
-      "Amount",
-      "Currency",
-      "Category",
-      "Transaction Type",
-      "Account",
-      "Destination Account",
-      "Destination Amount",
-      "Destination Currency",
-      "Exchange Rate",
-      "Fee", // Phase 4: Transfer fee support
-      "Payment Method",
-      "Tags",
-      "Notes",
-      "Created At",
-      "Updated At",
-    ];
-
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `Bills_${currentYear}!A1:R1`, // Updated to R1 to include Fee column
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [headers],
-      },
-    });
+    await this.setupSheetHeaders("bills", currentYear);
   }
 
-  async setupTempBillsHeaders(spreadsheetId: string) {
-    const headers = [
-      "bill_id", // Sequential numeric ID starting from 100 (primary key)
-      "user_id", // Telegram user ID
-      "transaction_data", // JSON string of BillRecord data
-      "guide_message_ids", // JSON array of guide message IDs for cleanup [123, 124, 125]
-      "user_input_message_id", // User's input message ID for cleanup
-      "original_message_id", // The main transaction message to preserve
-      "created_at", // Creation timestamp
-      "updated_at", // Last update timestamp
-    ];
+  async setupTempBillsHeaders() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: "TempBills!A1:H1",
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [headers],
-      },
-    });
+    await this.setupSheetHeaders("tempBills");
   }
 
-  async setupReferenceData(spreadsheetId: string) {
-    // Setup combined Categories, Accounts, and Income Sources in single sheet
-    const sheetName = "Reference";
+  async setupReferenceData() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
 
-    // Row 1: Section titles
-    const sectionTitles = [
-      ["📂 CATEGORIES", "", "", ""], // A1:D1
-    ];
+    // Setup combined Categories, Accounts, and Income Sources in single sheet using configuration
+    const sheetName = SheetsConfig.getSheetName("reference");
+    const config = SheetsConfig.SHEETS.reference;
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!A1:D1`,
-      valueInputOption: "RAW",
-      requestBody: { values: sectionTitles },
-    });
+    // Setup section titles using configuration
+    if (config.sections) {
+      for (const section of config.sections) {
+        const titleRange = SheetsConfig.getSectionHeaderRange(section, 1);
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!F1:F1`,
-      valueInputOption: "RAW",
-      requestBody: { values: [["💳 ACCOUNTS"]] },
-    });
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${titleRange}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [[section.title]],
+          },
+        });
+      }
+    }
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!L1:L1`,
-      valueInputOption: "RAW",
-      requestBody: { values: [["💰 INCOME SOURCES"]] },
-    });
+    // Setup column headers using configuration
+    if (config.sections) {
+      for (const section of config.sections) {
+        const headerRange = SheetsConfig.getSectionHeaderRange(section, 2);
+        const headers = section.fields.map((field) => field.name);
 
-    // Row 2: Column headers
-    const categoryHeaders = [
-      ["ID", "Name", "Emoji", "Description"], // A2:D2
-    ];
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${headerRange}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [headers],
+          },
+        });
+      }
+    }
 
-    const accountHeaders = [
-      ["ID", "Name", "Emoji", "Currency", "Description"], // F2:J2
-    ];
+    // Setup default data using configuration
+    if (config.sections) {
+      const sectionDataMap: Record<string, any[]> = {
+        "📂 CATEGORIES": SheetsConfig.DEFAULT_DATA.categories,
+        "💳 ACCOUNTS": SheetsConfig.DEFAULT_DATA.accounts,
+        "💰 INCOME SOURCES": SheetsConfig.DEFAULT_DATA.incomeSources,
+      };
 
-    const incomeSourceHeaders = [
-      ["ID", "Name", "Emoji", "Description"], // L2:O2
-    ];
+      for (const section of config.sections) {
+        const sectionData = sectionDataMap[section.title];
+        if (sectionData) {
+          const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+          const endRow = 3 + sectionData.length - 1;
+          const fullRange = `${sheetName}!${section.startColumn}3:${section.endColumn}${endRow}`;
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!A2:D2`,
-      valueInputOption: "RAW",
-      requestBody: { values: categoryHeaders },
-    });
-
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!F2:J2`,
-      valueInputOption: "RAW",
-      requestBody: { values: accountHeaders },
-    });
-
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!L2:O2`,
-      valueInputOption: "RAW",
-      requestBody: { values: incomeSourceHeaders },
-    });
-
-    // Row 3+: Data rows
-    const categoriesData = [
-      ["food", "Food", "🍕", "Restaurants, groceries, takeout"],
-      ["transport", "Transport", "🚗", "Gas, public transit, rideshare"],
-      ["shopping", "Shopping", "👕", "Clothes, electronics, general purchases"],
-      ["utilities", "Utilities", "💡", "Electricity, water, internet, phone"],
-      ["healthcare", "Healthcare", "🏥", "Medical bills, pharmacy, insurance"],
-      ["entertainment", "Entertainment", "🎬", "Movies, games, subscriptions"],
-      ["housing", "Housing", "🏠", "Rent, mortgage, maintenance"],
-      ["education", "Education", "📚", "Books, courses, tuition"],
-      ["other", "Other", "📋", "Miscellaneous expenses"],
-    ];
-
-    const accountsData = [
-      ["main_card", "Main Card", "💳", "USD", "Primary debit/credit card"],
-      ["checking", "Checking", "🏦", "USD", "Main checking account"],
-      ["euro_card", "Euro Card", "💳", "EUR", "European debit/credit card"],
-      ["euro_cash", "Euro Cash", "💰", "EUR", "Physical euro cash"],
-    ];
-
-    const incomeSourcesData = [
-      ["salary", "Salary", "💼", "Monthly salary income"],
-      ["freelance", "Freelance", "💻", "Freelance work income"],
-      ["bonus", "Bonus", "🎁", "Performance bonus"],
-      ["investment", "Investment", "📈", "Investment returns"],
-      ["rental", "Rental", "🏠", "Rental property income"],
-      ["business", "Business", "🏢", "Business income"],
-      ["gift", "Gift", "🎁", "Gift money received"],
-      ["refund", "Refund", "↩️", "Refund from purchase"],
-      ["other_income", "Other", "📋", "Other income sources"],
-    ];
-
-    // Setup categories data (A3:D11)
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!A3:D${3 + categoriesData.length - 1}`,
-      valueInputOption: "RAW",
-      requestBody: { values: categoriesData },
-    });
-
-    // Setup accounts data (F3:J6)
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!F3:J${3 + accountsData.length - 1}`,
-      valueInputOption: "RAW",
-      requestBody: { values: accountsData },
-    });
-
-    // Setup income sources data (L3:O11)
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!L3:O${3 + incomeSourcesData.length - 1}`,
-      valueInputOption: "RAW",
-      requestBody: { values: incomeSourcesData },
-    });
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: fullRange,
+            valueInputOption: "RAW",
+            requestBody: { values: sectionData },
+          });
+        }
+      }
+    }
 
     // Add visual formatting with colored borders and background
-    await this.formatReferenceSheet(spreadsheetId, sheetName);
+    await this.formatReferenceSheet(this.spreadsheetId, sheetName);
   }
 
   async formatReferenceSheet(spreadsheetId: string, sheetName: string) {
@@ -765,19 +725,23 @@ export class GoogleSheetsAdapter {
     }
   }
 
-  async setupConfigData(spreadsheetId: string) {
-    const config = [
-      ["Setting", "Value", "Description"],
-      ["timezone", "UTC", "Default timezone"],
-      ["date_format", "YYYY-MM-DD", "Date format preference"],
-    ];
+  async setupConfigData() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    const sheetName = SheetsConfig.getSheetName("config");
+    const config = SheetsConfig.SHEETS.config;
+    const configData = SheetsConfig.DEFAULT_DATA.config;
+
+    const range = `${sheetName}!${SheetsConfig.getDataRange(config, 1)}`;
 
     await this.sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: "Config!A1:C3",
+      spreadsheetId: this.spreadsheetId,
+      range,
       valueInputOption: "RAW",
       requestBody: {
-        values: config,
+        values: configData,
       },
     });
   }
@@ -821,7 +785,9 @@ export class GoogleSheetsAdapter {
 
     try {
       const currentYear = new Date().getFullYear();
-      const sheetName = `Bills_${currentYear}`;
+      const sheetName = SheetsConfig.getSheetName("bills", {
+        year: currentYear,
+      });
 
       // Ensure the yearly sheet exists
       await this.ensureYearlySheetExists(currentYear);
@@ -842,29 +808,35 @@ export class GoogleSheetsAdapter {
       const defaultAccount = await this.getDefaultAccount();
       const defaultCategory = await this.getDefaultCategory();
 
-      const values = [
-        itemId, // ID
-        normalizedDate, // Date
-        title, // Title/Description
-        totalPrice, // Amount
-        finalCurrency.toUpperCase(), // Currency
-        defaultCategory, // Category (first category or "none")
-        "Expense", // Transaction Type (default)
-        defaultAccount, // Account (first account or "none")
-        "", // Destination Account
-        "", // Destination Amount
-        "", // Destination Currency
-        "", // Exchange Rate
-        "", // Payment Method
-        "", // Tags
-        description, // Notes
-        timestamp, // Created At
-        timestamp, // Updated At
-      ];
+      // Create values using configuration template
+      const billData = {
+        ID: itemId,
+        Date: normalizedDate,
+        "Title/Description": title,
+        Amount: totalPrice,
+        Currency: finalCurrency.toUpperCase(),
+        Category: defaultCategory,
+        "Transaction Type": "Expense",
+        Account: defaultAccount,
+        "Destination Account": "",
+        "Destination Amount": "",
+        "Destination Currency": "",
+        "Exchange Rate": "",
+        Fee: "",
+        "Payment Method": "",
+        Tags: "",
+        Notes: description,
+        "Created At": timestamp,
+        "Updated At": timestamp,
+      };
+
+      const values = SheetsConfig.generateTemplateRow("bills", billData);
+      const config = SheetsConfig.SHEETS.bills;
+      const dataRange = SheetsConfig.getDataRange(config);
 
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `${sheetName}!A:Q`,
+        range: `${sheetName}!${dataRange}`,
         valueInputOption: "RAW",
         requestBody: {
           values: [values],
@@ -902,7 +874,16 @@ export class GoogleSheetsAdapter {
 
   async getCategories() {
     try {
-      const range = "Reference!A3:D";
+      const sheetName = SheetsConfig.getSheetName("reference");
+      const section = SheetsConfig.getSection("reference", "📂 CATEGORIES");
+
+      if (!section) {
+        throw new Error("Categories section not found in configuration");
+      }
+
+      const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+      const range = `${sheetName}!${dataRange}`;
+
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
@@ -924,7 +905,16 @@ export class GoogleSheetsAdapter {
 
   async getAccounts() {
     try {
-      const range = "Reference!F3:J";
+      const sheetName = SheetsConfig.getSheetName("reference");
+      const section = SheetsConfig.getSection("reference", "💳 ACCOUNTS");
+
+      if (!section) {
+        throw new Error("Accounts section not found in configuration");
+      }
+
+      const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+      const range = `${sheetName}!${dataRange}`;
+
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
@@ -947,7 +937,16 @@ export class GoogleSheetsAdapter {
 
   async getIncomeSources() {
     try {
-      const range = "Reference!L3:O";
+      const sheetName = SheetsConfig.getSheetName("reference");
+      const section = SheetsConfig.getSection("reference", "💰 INCOME SOURCES");
+
+      if (!section) {
+        throw new Error("Income sources section not found in configuration");
+      }
+
+      const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+      const range = `${sheetName}!${dataRange}`;
+
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
@@ -982,7 +981,11 @@ export class GoogleSheetsAdapter {
 
   async getConfig() {
     try {
-      const range = "Config!A2:B";
+      const sheetName = SheetsConfig.getSheetName("config");
+      const configSheet = SheetsConfig.SHEETS.config;
+      const dataRange = SheetsConfig.getDataRange(configSheet, 2); // Skip header row
+      const range = `${sheetName}!${dataRange}`;
+
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range,
