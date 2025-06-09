@@ -347,7 +347,7 @@ export class SheetsConfig {
                   { name: "Value", type: "string", required: true },
                   { name: "Description", type: "string" },
                 ],
-                maxRows: 5,
+                maxRows: 2,
                 hasHeaders: true,
                 defaultData: [
                   [
@@ -362,7 +362,6 @@ export class SheetsConfig {
                 header: { red: 0.95, green: 0.9, blue: 1 },
                 border: { red: 0.5, green: 0.2, blue: 0.8 },
               },
-              spacing: { left: 8 },
             },
           ],
           [
@@ -376,7 +375,7 @@ export class SheetsConfig {
                   { name: "Currency", type: "currency", required: true },
                   { name: "Balance", type: "number" },
                 ],
-                maxRows: 15, // limited to max accounts
+                maxRows: this.LIMITS.MAX_ACCOUNTS, // limited to max accounts
                 hasHeaders: true,
               },
               color: {
@@ -384,8 +383,6 @@ export class SheetsConfig {
                 header: { red: 0.8, green: 0.98, blue: 0.8 },
                 border: { red: 0.1, green: 0.7, blue: 0.1 },
               },
-
-              spacing: { left: 8, top: 1 }, // 2 empty rows above
             },
           ],
         ],

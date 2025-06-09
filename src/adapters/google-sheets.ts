@@ -256,30 +256,6 @@ export class GoogleSheetsAdapter {
             valueInputOption: "RAW",
             requestBody: { values: section.table.defaultData },
           });
-
-          // Add limit label for sections with maxRows
-          if (section.table.maxRows) {
-            const limitRow = endRow + 2; // Skip one row and add limit label
-            const limitRange = `${sheetName}!${section._calculated.startColumn}${limitRow}:${section._calculated.endColumn}${limitRow}`;
-            const limitText = `Max ${section.table.maxRows} ${section.title
-              .replace(/[📂💳💰]/g, "")
-              .trim()
-              .toLowerCase()} allowed`;
-
-            // Create appropriate number of empty columns before the limit text
-            const fieldCount = section.table.fields.length;
-            const limitValues = Array(fieldCount).fill("");
-            limitValues[2] = limitText; // Put limit text in the "Name" column (3rd column, index 2)
-
-            await this.sheets.spreadsheets.values.update({
-              spreadsheetId: this.spreadsheetId,
-              range: limitRange,
-              valueInputOption: "RAW",
-              requestBody: {
-                values: [limitValues],
-              },
-            });
-          }
         }
       }
     }
@@ -589,6 +565,9 @@ export class GoogleSheetsAdapter {
         await this.setupAccountBalancesWithFormulas();
       }
 
+      // Create expense comparison pie chart
+      await this.createExpenseComparisonPieChart();
+
       // Apply beautiful formatting
       await this.formatDashboardSheet(this.spreadsheetId, sheetName);
 
@@ -596,6 +575,249 @@ export class GoogleSheetsAdapter {
     } catch (error) {
       console.error("Error setting up dashboard:", error);
       throw error;
+    }
+  }
+
+  async createExpenseComparisonPieChart() {
+    try {
+      const sheetName = SheetsConfig.getSheetName("dashboard");
+      const sheetId = await this.getSheetId(sheetName);
+
+      // Get the selected year from the dashboard configuration
+      const selectedYear = await this.getSelectedYear();
+      console.log(
+        `Creating expense comparison pie chart for year ${selectedYear}`
+      );
+
+      // Remove existing charts first (if any)
+      await this.removeExistingCharts(sheetId);
+
+      // Get expense data grouped by category
+      const expenseData = await this.getExpenseDataByCategory(selectedYear);
+
+      if (expenseData.length === 0) {
+        console.log("No expense data found for pie chart");
+        return;
+      }
+
+      // First, expand the dashboard sheet grid to accommodate chart data
+      // We need at least 21 columns (up to column U) for chart data
+      const currentConfig = SheetsConfig.SHEETS.dashboard;
+      const requiredColumns = Math.max(
+        21,
+        currentConfig.gridProperties.columnCount
+      );
+
+      if (currentConfig.gridProperties.columnCount < requiredColumns) {
+        console.log(
+          `Expanding dashboard grid from ${currentConfig.gridProperties.columnCount} to ${requiredColumns} columns`
+        );
+
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                updateSheetProperties: {
+                  properties: {
+                    sheetId: sheetId,
+                    gridProperties: {
+                      rowCount: currentConfig.gridProperties.rowCount,
+                      columnCount: requiredColumns,
+                    },
+                  },
+                  fields: "gridProperties.columnCount",
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      // Place chart data in columns T and U (now that we've expanded the grid)
+      const chartDataStartRow = 1;
+      const chartDataEndRow = chartDataStartRow + expenseData.length - 1;
+      const chartDataStartCol = 19; // Column T (0-based, so 19 = T)
+      const chartDataEndCol = 20; // Column U (0-based, so 20 = U)
+      const chartDataRange = `T${chartDataStartRow}:U${chartDataEndRow}`;
+
+      // Write chart data to the sheet (in far right columns T-U)
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!${chartDataRange}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: expenseData,
+        },
+      });
+
+      // Create pie chart specification
+      const chartSpec = {
+        title: `Expense Comparison ${selectedYear}`,
+        pieChart: {
+          domain: {
+            sourceRange: {
+              sources: [
+                {
+                  sheetId: sheetId,
+                  startRowIndex: chartDataStartRow - 1,
+                  endRowIndex: chartDataEndRow,
+                  startColumnIndex: chartDataStartCol,
+                  endColumnIndex: chartDataStartCol + 1,
+                },
+              ],
+            },
+          },
+          series: {
+            sourceRange: {
+              sources: [
+                {
+                  sheetId: sheetId,
+                  startRowIndex: chartDataStartRow - 1,
+                  endRowIndex: chartDataEndRow,
+                  startColumnIndex: chartDataEndCol,
+                  endColumnIndex: chartDataEndCol + 1,
+                },
+              ],
+            },
+          },
+          pieHole: 0.2, // Donut chart style
+          legendPosition: "RIGHT_LEGEND",
+        },
+        titleTextFormat: {
+          fontSize: 16,
+          bold: true,
+        },
+        backgroundColor: {
+          red: 1.0,
+          green: 1.0,
+          blue: 1.0,
+        },
+      };
+
+      // Position the chart in the left space area
+      const requests = [
+        {
+          addChart: {
+            chart: {
+              spec: chartSpec,
+              position: {
+                overlayPosition: {
+                  anchorCell: {
+                    sheetId: sheetId,
+                    rowIndex: 0, // Start from top
+                    columnIndex: 0, // Start from left
+                  },
+                  offsetXPixels: 20,
+                  offsetYPixels: 20,
+                  widthPixels: 400,
+                  heightPixels: 300,
+                },
+              },
+            },
+          },
+        },
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: { requests },
+      });
+
+      // Don't clear the chart data - it needs to stay for the chart to work!
+      // The data is now placed in columns T-U which are outside the visible dashboard area
+
+      console.log("Expense comparison pie chart created successfully");
+      console.log(`Chart data placed in range: ${sheetName}!${chartDataRange}`);
+    } catch (error) {
+      console.error("Error creating expense comparison pie chart:", error);
+      throw error;
+    }
+  }
+
+  async removeExistingCharts(sheetId: number) {
+    try {
+      // Get the spreadsheet to find existing charts
+      const spreadsheet = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+
+      const sheet = spreadsheet.data.sheets.find(
+        (s: any) => s.properties.sheetId === sheetId
+      );
+
+      if (sheet && sheet.charts && sheet.charts.length > 0) {
+        const deleteRequests = sheet.charts.map((chart: any) => ({
+          deleteEmbeddedObject: {
+            objectId: chart.chartId,
+          },
+        }));
+
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: { requests: deleteRequests },
+        });
+
+        console.log(`Removed ${sheet.charts.length} existing charts`);
+      }
+    } catch (error) {
+      console.error("Error removing existing charts:", error);
+      // Don't throw error, just log it as this is cleanup
+    }
+  }
+
+  async getExpenseDataByCategory(year: number): Promise<(string | number)[][]> {
+    try {
+      const billsSheetName = SheetsConfig.getSheetName("bills", { year });
+
+      // Get all bills data for the year
+      const billsData = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${billsSheetName}!A2:G1000`, // ID, Date, Title, Amount, Currency, Category, Transaction Type
+      });
+
+      const rows = billsData.data.values || [];
+
+      // Group expenses by category
+      const expensesByCategory: { [category: string]: number } = {};
+
+      rows.forEach((row: any[]) => {
+        const transactionType = row[6]; // Transaction Type column
+        const category = row[5]; // Category column
+        const amount = parseFloat(row[3]) || 0; // Amount column
+
+        // Only include expense transactions
+        if (
+          transactionType &&
+          transactionType.toLowerCase() === "expense" &&
+          category &&
+          amount > 0
+        ) {
+          if (!expensesByCategory[category]) {
+            expensesByCategory[category] = 0;
+          }
+          expensesByCategory[category] += amount;
+        }
+      });
+
+      // Convert to array format for chart: [Category, Amount]
+      // Let Google Sheets handle percentage calculations dynamically
+      const chartData: (string | number)[][] = [];
+      Object.entries(expensesByCategory).forEach(([category, amount]) => {
+        chartData.push([category, amount]); // Simple category names, Google Sheets will calculate percentages
+      });
+
+      // Sort by amount (descending) for better visualization
+      chartData.sort((a, b) => (b[1] as number) - (a[1] as number));
+
+      console.log(
+        `Found ${chartData.length} expense categories with data:`,
+        chartData
+      );
+      return chartData;
+    } catch (error) {
+      console.error("Error getting expense data by category:", error);
+      return [];
     }
   }
 
@@ -1141,10 +1363,32 @@ export class GoogleSheetsAdapter {
       // With formula-based calculations, the dashboard updates automatically
       // We can just re-setup the account balances formulas if needed
       await this.setupAccountBalancesWithFormulas();
-      console.log("Dashboard data updated successfully");
+
+      // Recreate expense comparison pie chart with updated data
+      await this.createExpenseComparisonPieChart();
+
+      console.log("Dashboard data and charts updated successfully");
       return { success: true };
     } catch (error) {
       console.error("Error updating dashboard:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Refresh the expense comparison pie chart with the latest data
+   * This can be called independently when expense data changes
+   */
+  async refreshExpenseChart() {
+    try {
+      await this.createExpenseComparisonPieChart();
+      console.log("Expense comparison pie chart refreshed successfully");
+      return { success: true };
+    } catch (error) {
+      console.error("Error refreshing expense chart:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -2204,6 +2448,18 @@ export class GoogleSheetsAdapter {
       // Note: TempBill deletion is now handled by BillManager to ensure proper message cleanup
 
       console.log(`Bill #${billId} successfully submitted to ${sheetName}`);
+
+      // Refresh expense chart after adding new bill
+      try {
+        await this.refreshExpenseChart();
+      } catch (chartError) {
+        console.error(
+          "Error refreshing expense chart after bill submission:",
+          chartError
+        );
+        // Don't fail the whole operation if chart refresh fails
+      }
+
       return { success: true, yearlySheetRecord, tempBill };
     } catch (error) {
       console.error(`Error submitting bill #${billId} to yearly sheet:`, error);
@@ -2363,6 +2619,18 @@ export class GoogleSheetsAdapter {
       });
 
       console.log(`Bill #${billId} successfully updated in ${sheetName}`);
+
+      // Refresh expense chart after updating bill
+      try {
+        await this.refreshExpenseChart();
+      } catch (chartError) {
+        console.error(
+          "Error refreshing expense chart after bill update:",
+          chartError
+        );
+        // Don't fail the whole operation if chart refresh fails
+      }
+
       return { success: true };
     } catch (error) {
       console.error(`Error updating bill #${billId} in yearly sheet:`, error);
