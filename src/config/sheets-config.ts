@@ -1209,8 +1209,21 @@ export class SheetsConfig {
         // Currency formula
         const currencyFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${currencyColumn}${referenceRow}, "")`;
 
-        // Balance formula
-        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.TRANSFER}"), "")`;
+        // Balance formula - Fixed to handle all transaction types correctly
+        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", 
+          SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.INCOME}")
+          -SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.EXPENSE}")
+          +SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.TRANSFER}")
+          -SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},
+            INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.TRANSFER}"), 
+          "")`;
 
         accountData.push([accountNameFormula, currencyFormula, balanceFormula]);
       }
