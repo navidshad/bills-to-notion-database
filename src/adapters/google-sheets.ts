@@ -841,6 +841,8 @@ export class GoogleSheetsAdapter {
   }
 
   async createExpenseComparisonPieChart() {
+    return;
+
     try {
       const sheetName = SheetsConfig.getSheetName("dashboard");
       const sheetId = await this.getSheetId(sheetName);
