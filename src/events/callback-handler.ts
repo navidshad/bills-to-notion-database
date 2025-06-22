@@ -1207,7 +1207,7 @@ MENU: Cancellation Confirmation 👇`;
           chatId,
           templateMessage,
           transactionId,
-          { parse_mode: "Markdown" },
+          {},
           "guide"
         );
 

@@ -129,7 +129,7 @@ export const generateTransferInfo = async (
     ],
     [
       "user",
-      "EXCHANGE RATE LOGIC:\n• If same currency transfer (USD to USD): exchange_rate = 1.0\n• If different currencies: extract rate from text or leave undefined\n• If rate provided: destination_amount = amount / exchange_rate\n• If destination_amount provided: exchange_rate = amount / destination_amount",
+      "EXCHANGE RATE LOGIC:\n• If same currency transfer (USD to USD): exchange_rate = 1.0\n• If different currencies: extract rate from text or leave undefined\n• If rate provided: destination_amount = amount * exchange_rate\n• If destination_amount provided: exchange_rate = destination_amount / amount",
     ],
     [
       "user",

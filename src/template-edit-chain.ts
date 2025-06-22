@@ -26,6 +26,10 @@ const templateEditSchema = z.object({
         .number()
         .optional()
         .describe("Transfer fee if provided (for transfers)"),
+      destination_amount: z
+        .number()
+        .optional()
+        .describe("Amount in destination currency (for transfers)"),
       category: z
         .string()
         .optional()
@@ -68,6 +72,7 @@ VALID FIELDS:
 - date: date string (convert to ISO format YYYY-MM-DD)
 - rate: exchange rate numeric value (e.g., 1.18) - for transfer transactions
 - fee: fee amount numeric value (e.g., 3.00) - for transfer transactions
+- destination_amount: numeric value (e.g., 118.00) - for transfer transactions
 - category: text string (e.g., "Food", "Transport") - for expense transactions
 
 RULES:
@@ -126,8 +131,12 @@ export function generateEditTemplate(
   if (transactionType === "transfer") {
     const rate = transactionData?.exchange_rate || "1.0";
     const fee = transactionData?.fee || "0";
+    const destinationAmount = transactionData?.destination_amount;
     templateFields += `rate: ${rate}\n`;
     templateFields += `fee: ${fee}\n`;
+    if (destinationAmount) {
+      templateFields += `destination_amount: ${destinationAmount}\n`;
+    }
   } else if (transactionType === "expense") {
     const category = transactionData?.category || "none";
     templateFields += `category: ${category}\n`;
@@ -140,5 +149,6 @@ Copy this template, edit the values you want to change, and send it back:
 /edit ${transactionId}
 
 ${templateFields}
+
 ✏️ Edit any field you want to change, then send the whole template back.`;
 }

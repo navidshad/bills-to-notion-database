@@ -48,7 +48,7 @@ function formatTransactionMessage(
     const exchangeRate = transactionData?.exchange_rate || "1.0";
     const destinationAmount =
       transactionData?.destination_amount ||
-      (parseFloat(amount) / parseFloat(exchangeRate)).toFixed(2);
+      (parseFloat(amount) * parseFloat(exchangeRate)).toFixed(2);
     const fee = transactionData?.fee || 0;
 
     const fromSymbol = getCurrencySymbol(fromCurrency);
@@ -226,10 +226,33 @@ function registerMessageHandler(bot: any) {
               transactionData.total_price || transactionData.amount
             );
             transactionData.destination_amount = (
-              sourceAmount / fieldsToUpdate.rate
+              sourceAmount * fieldsToUpdate.rate
             ).toFixed(2);
           }
           updatedFields.push(`rate: ${fieldsToUpdate.rate}`);
+        }
+
+        if (fieldsToUpdate.destination_amount !== undefined) {
+          transactionData.destination_amount =
+            fieldsToUpdate.destination_amount;
+          // Recalculate exchange rate if we have source amount
+          if (transactionData.total_price || transactionData.amount) {
+            const sourceAmount = parseFloat(
+              transactionData.total_price || transactionData.amount
+            );
+            if (sourceAmount > 0) {
+              transactionData.exchange_rate = (
+                fieldsToUpdate.destination_amount / sourceAmount
+              ).toFixed(4);
+            }
+          }
+          updatedFields.push(
+            `destination_amount: ${getCurrencySymbol(
+              transactionData.destination_currency ||
+                transactionData.currency_code ||
+                "USD"
+            )}${fieldsToUpdate.destination_amount}`
+          );
         }
 
         if (fieldsToUpdate.fee !== undefined) {
