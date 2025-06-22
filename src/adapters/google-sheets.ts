@@ -1389,9 +1389,11 @@ export class GoogleSheetsAdapter {
   }
 
   async getCategories() {
+    await this.setupReferenceData();
+
     try {
       const sheetName = SheetsConfig.getSheetName("reference");
-      const section = SheetsConfig.getSection("reference", "📂 CATEGORIES");
+      const section = SheetsConfig.getSection("reference", "categories");
 
       if (!section) {
         throw new Error("Categories section not found in configuration");
@@ -1445,9 +1447,11 @@ export class GoogleSheetsAdapter {
   }
 
   async getAccounts() {
+    // await this.setupReferenceData();
+
     try {
       const sheetName = SheetsConfig.getSheetName("reference");
-      const section = SheetsConfig.getSection("reference", "💳 ACCOUNTS");
+      const section = SheetsConfig.getSection("reference", "accounts");
 
       if (!section) {
         throw new Error("Accounts section not found in configuration");
@@ -1494,9 +1498,11 @@ export class GoogleSheetsAdapter {
   }
 
   async getIncomeSources() {
+    await this.setupReferenceData();
+
     try {
       const sheetName = SheetsConfig.getSheetName("reference");
-      const section = SheetsConfig.getSection("reference", "💰 INCOME SOURCES");
+      const section = SheetsConfig.getSection("reference", "income_sources");
 
       if (!section) {
         throw new Error("Income sources section not found in configuration");
@@ -1795,7 +1801,7 @@ export class GoogleSheetsAdapter {
       return Array.from(new Set(currencies)); // Remove duplicates
     } catch (error) {
       console.error("Error getting supported currencies:", error);
-      return ["USD", "EUR"]; // Fallback to defaults
+      return ["none"]; // Fallback to defaults
     }
   }
 

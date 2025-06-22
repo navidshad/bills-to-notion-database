@@ -9,6 +9,7 @@ import TelegramBot from "node-telegram-bot-api";
 import { registerInitCommand } from "./events/commands/init-command";
 import { registerHelpCommand } from "./events/commands/help-command";
 import { registerAddCommand } from "./events/commands/add-command";
+import { registerTransferCommand } from "./events/commands/transfer-command";
 import registerPendingCommand from "./events/commands/pending-command";
 import { registerUpdateCommand } from "./events/commands/update-command";
 import { registerMessageHandler } from "./events/message-handler";
@@ -24,6 +25,7 @@ const bot = new TelegramBot(token, { polling: true });
 registerInitCommand(bot);
 registerHelpCommand(bot);
 registerAddCommand(bot);
+registerTransferCommand(bot);
 registerPendingCommand(bot);
 registerUpdateCommand(bot);
 registerMessageHandler(bot);
@@ -34,8 +36,9 @@ console.log("Available commands:");
 console.log("  /init - Initialize Google Sheets workbook");
 console.log("  /help - Show help information");
 console.log("  /add - Add new transaction (followed by photo/text)");
+console.log("  /transfer - Add transfer transaction (followed by photo/text)");
 console.log("  /pending - List all pending transactions");
 console.log(
   "  /update - Update dashboard layout based on reference sheet changes"
 );
-console.log("Use /add command to process bills and expenses.");
+console.log("Use /add or /transfer commands to process transactions.");

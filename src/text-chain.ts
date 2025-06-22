@@ -8,6 +8,12 @@ import {
   BillRecord,
   UserIntent,
 } from "./types";
+import {
+  transferRecordSchema,
+  transferIntentSchema,
+  TransferRecord,
+  TransferIntent,
+} from "./types/transfer.types";
 
 const llm = new ChatOpenAI({
   modelName: "gpt-4o",
@@ -89,6 +95,103 @@ export const generateBillInfo = async (
       console.error(error);
       return error;
     });
+};
+
+/**
+ * Generate transfer-specific transaction info using AI
+ */
+export const generateTransferInfo = async (
+  transferDetail: string,
+  supportedCurrencies?: string[],
+  availableAccounts?: any[]
+): Promise<TransferRecord> => {
+  const currencyHint =
+    supportedCurrencies && supportedCurrencies.length > 0
+      ? `\n\nSUPPORTED CURRENCIES: ${supportedCurrencies.join(
+          ", "
+        )}. Use these currencies when possible.`
+      : "";
+
+  const accountsHint =
+    availableAccounts && availableAccounts.length > 0
+      ? `\n\nAVAILABLE ACCOUNTS: You MUST use ONLY these account names/IDs: ${availableAccounts
+          .map((acc) => `"${acc.id}" (${acc.name} - ${acc.currency})`)
+          .join(
+            ", "
+          )}. For from_account and to_account, use exact account IDs. If you cannot determine which account fits, use the account name as written in the transfer description.`
+      : "";
+
+  const chatTemplate = ChatPromptTemplate.fromMessages([
+    ["user", "Transfer Transaction: {transferDetail}"],
+    [
+      "user",
+      "TRANSFER ANALYSIS: Extract transfer details from the text:\n• Amount in source currency\n• Source account (from_account)\n• Destination account (to_account)\n• Source currency (from_currency)\n• Destination currency (to_currency)\n• Exchange rate if mentioned\n• Transfer fee if mentioned\n• Transfer date\n• Optional description/note",
+    ],
+    [
+      "user",
+      "EXCHANGE RATE LOGIC:\n• If same currency transfer (USD to USD): exchange_rate = 1.0\n• If different currencies: extract rate from text or leave undefined\n• If rate provided: destination_amount = amount / exchange_rate\n• If destination_amount provided: exchange_rate = amount / destination_amount",
+    ],
+    [
+      "user",
+      "CURRENCY DETECTION: Look for currency codes (USD, EUR, GBP, etc.) or symbols ($, €, £, etc.). Extract 3-letter ISO codes." +
+        currencyHint,
+    ],
+    [
+      "user",
+      "ACCOUNTS: Use exact account names/IDs from the available accounts list." +
+        accountsHint,
+    ],
+    [
+      "user",
+      "DATE: Use valid ISO 8601 format (YYYY-MM-DD). Current date context: {msg_date}",
+    ],
+    [
+      "user",
+      "IMPORTANT: transaction_type must always be 'transfer'. Return result according to the schema.",
+    ],
+    ["system", "JSON result is:"],
+  ]);
+
+  const transferJsonSchema = zodToJsonSchema(transferRecordSchema);
+  const chain = chatTemplate.pipe(llm.withStructuredOutput(transferJsonSchema));
+
+  const parsed_date = new Date(Date.now())
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z");
+
+  return chain
+    .invoke({
+      transferDetail,
+      msg_date: parsed_date,
+    })
+    .catch((error: any) => {
+      console.error("Error generating transfer info:", error);
+      return error;
+    });
+};
+
+/**
+ * Interpret user message for transfer intent
+ */
+export const interpretTransferMessage = (
+  message: string
+): Promise<TransferIntent> => {
+  const chatTemplate = ChatPromptTemplate.fromMessages([
+    ["user", "{message}"],
+    [
+      "user",
+      "Analyze the user request to determine if it's a transfer transaction. Return 'transfer' if the user is describing a money transfer between accounts, including:\n• Moving money between personal accounts\n• Bank transfers\n• Account-to-account transfers\n• Currency exchanges between accounts\n• Any transaction involving 'transfer', 'move money', 'send from X to Y'\n\nReturn 'general' only for non-transfer conversations or other transaction types.",
+    ],
+    ["system", "JSON result is:"],
+  ]);
+
+  const intentJsonSchema = zodToJsonSchema(transferIntentSchema);
+  const chain = chatTemplate.pipe(llm.withStructuredOutput(intentJsonSchema));
+
+  return chain.invoke({ message }).catch((error: any) => {
+    console.error("Error interpreting transfer message:", error);
+    return error;
+  });
 };
 
 export const interpretUserMessage = (message: string): Promise<UserIntent> => {

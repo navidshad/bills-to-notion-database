@@ -836,14 +836,14 @@ export class SheetsConfig {
   // Legacy compatibility - get section by title
   static getSection(
     sheetKey: string,
-    sectionTitle: string
+    sectionId: string
   ): SheetSection | undefined {
     const sheet = this.SHEETS[sheetKey];
     if (!sheet?.grid) return undefined;
 
     for (const sectionRow of sheet.grid.sections) {
       for (const section of sectionRow) {
-        if (section && section.title === sectionTitle) {
+        if (section && section.id === sectionId) {
           return section;
         }
       }

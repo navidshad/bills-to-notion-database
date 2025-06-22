@@ -1,14 +1,11 @@
 /**
- * Add command handler for processing expense and income transactions
- * Handles /add command with photo or text (transfers handled by /transfer command)
+ * Transfer command handler for processing transfer transactions
+ * Handles /transfer command with photo or text
  */
 
 import { getReceiptDetail } from "../../utils/receipt-processor";
 import * as textChain from "../../text-chain";
-import {
-  createExpenseKeyboard,
-  createIncomeKeyboard,
-} from "../../keyboards/bill-keyboards";
+import { createTransferKeyboard } from "../../keyboards/bill-keyboards";
 import IDManager from "../../managers/id-manager";
 import GoogleSheetsAdapter from "../../adapters/google-sheets";
 import {
@@ -16,31 +13,39 @@ import {
   sendTemporaryMessage,
   trackMessageForTransaction,
 } from "../../utils/message-tracker";
+import {
+  TransferRecord,
+  transferToBillRecord,
+  billToTransferRecord,
+} from "../../types/transfer.types";
 
 /**
- * Register /add command
+ * Register /transfer command
  * @param {Object} bot - Telegram bot instance
  */
-function registerAddCommand(bot: any) {
-  bot.onText(/\/add/, async (msg: any) => {
+function registerTransferCommand(bot: any) {
+  bot.onText(/\/transfer/, async (msg: any) => {
     const chatId = msg.chat.id;
 
     // Check if photo or text follows the command
     const hasPhoto =
       !!msg.photo && (!!msg.photo[3]?.file_id || msg.photo[2]?.file_id);
-    const hasText = !!msg.text && msg.text.length > 4; // More than just "/add"
+    const hasText = !!msg.text && msg.text.length > 9; // More than just "/transfer"
 
     if (hasPhoto) {
-      // Process photo with /add command
+      // Process photo with /transfer command
       const imageId = msg.photo[3]?.file_id || msg.photo[2]?.file_id;
 
       // Send processing message
       const previewMessage = await bot.sendPhoto(chatId, imageId, {
-        caption: "Processing your receipt...",
+        caption: "Processing your transfer receipt...",
       });
 
-      // Extract receipt data
+      // Extract receipt data with transfer context
       const billDetail = await getReceiptDetail(imageId, msg.caption, bot);
+
+      // Force transaction type to transfer
+      billDetail.transaction_type = "transfer";
 
       // Validate bill data (account and category existence)
       const validation = await GoogleSheetsAdapter.validateBillData(billDetail);
@@ -68,7 +73,7 @@ function registerAddCommand(bot: any) {
         validatedBillDetail.currency_code = currencyValidation.currency;
       } catch (error) {
         console.warn(
-          "Failed to validate currency for photo, using extracted value:",
+          "Failed to validate currency for transfer photo, using extracted value:",
           error
         );
         // Use extracted currency or default to USD
@@ -103,14 +108,13 @@ function registerAddCommand(bot: any) {
         "processing"
       );
 
-      // Create transaction message with expense keyboard
-      const transactionMessage = formatTransactionMessage(
-        "expense",
+      // Create transaction message with transfer keyboard
+      const transactionMessage = formatTransferMessage(
         transactionId,
         validatedBillDetail,
         currencyValidation.warning
       );
-      const keyboard = await createExpenseKeyboard(
+      const keyboard = await createTransferKeyboard(
         transactionId,
         validatedBillDetail
       );
@@ -122,15 +126,15 @@ function registerAddCommand(bot: any) {
         reply_markup: keyboard,
       });
     } else if (hasText) {
-      // Process text with /add command
-      const description = msg.text.substring(4).trim(); // Remove "/add" prefix
+      // Process text with /transfer command
+      const description = msg.text.substring(9).trim(); // Remove "/transfer" prefix
 
       if (!description) {
-        // Send temporary instruction message (no tracking needed as it's not related to a transaction)
+        // Send temporary instruction message
         await sendTemporaryMessage(
           bot,
           chatId,
-          "📸 Send me a photo of your receipt or describe your expense/income after /add",
+          "💸 Describe your transfer or send a photo\n\nExample:\n• /transfer Transfer $100 from savings to checking\n• /transfer Move €50 from main card to cash wallet",
           8000 // Auto-delete after 8 seconds
         );
         return;
@@ -139,49 +143,39 @@ function registerAddCommand(bot: any) {
       // Send processing message
       const previewMessage = await bot.sendMessage(
         chatId,
-        "Processing your transaction..."
+        "Processing your transfer..."
       );
 
-      // Process text description
-      const { intent, general } = await textChain.interpretUserMessage(
+      // Get supported currencies and accounts for AI hint with fallback
+      let supportedCurrencies: string[] = [];
+      let availableAccounts: any[] = [];
+
+      try {
+        supportedCurrencies =
+          await GoogleSheetsAdapter.getSupportedCurrencies();
+        availableAccounts = await GoogleSheetsAdapter.getAccounts();
+      } catch (error) {
+        console.warn(
+          "Failed to get data from Google Sheets, using defaults:",
+          error
+        );
+      }
+
+      // Process text description for transfer intent
+      const { intent, general } = await textChain.interpretTransferMessage(
         description
       );
 
-      if (intent === "add-bill") {
-        // Get supported currencies for AI hint with fallback
-        let supportedCurrencies: string[] = ["USD", "EUR"];
-        let currencyValidation: {
-          isValid: boolean;
-          currency: string;
-          warning?: string;
-          supportedCurrencies: string[];
-        } = {
-          isValid: true,
-          currency: "USD",
-          supportedCurrencies: ["USD", "EUR"],
-        };
-
-        let availableAccounts: any[] = [];
-        let availableCategories: any[] = [];
-
-        try {
-          supportedCurrencies =
-            await GoogleSheetsAdapter.getSupportedCurrencies();
-          availableAccounts = await GoogleSheetsAdapter.getAccounts();
-          availableCategories = await GoogleSheetsAdapter.getCategories();
-        } catch (error) {
-          console.warn(
-            "Failed to get data from Google Sheets, using defaults:",
-            error
-          );
-        }
-
-        const billDetail = await textChain.generateBillInfo(
+      if (intent === "transfer") {
+        // Generate transfer-specific info using the new transfer chain
+        const transferData = await textChain.generateTransferInfo(
           description,
           supportedCurrencies,
-          availableAccounts,
-          availableCategories
+          availableAccounts
         );
+
+        // Convert transfer data to bill format for compatibility with existing systems
+        const billDetail = transferToBillRecord(transferData);
 
         // Validate bill data (account and category existence)
         const validation = await GoogleSheetsAdapter.validateBillData(
@@ -192,6 +186,17 @@ function registerAddCommand(bot: any) {
         const validatedBillDetail = validation.correctedData;
 
         // Validate currency and get warnings with fallback
+        let currencyValidation: {
+          isValid: boolean;
+          currency: string;
+          warning?: string;
+          supportedCurrencies: string[];
+        } = {
+          isValid: true,
+          currency: validatedBillDetail.currency_code || "USD",
+          supportedCurrencies: ["USD", "EUR"],
+        };
+
         try {
           currencyValidation = await GoogleSheetsAdapter.validateCurrency(
             validatedBillDetail.currency_code
@@ -200,7 +205,7 @@ function registerAddCommand(bot: any) {
           validatedBillDetail.currency_code = currencyValidation.currency;
         } catch (error) {
           console.warn(
-            "Failed to validate currency, using extracted value:",
+            "Failed to validate currency for transfer, using extracted value:",
             error
           );
           // Use extracted currency or default to USD
@@ -235,38 +240,16 @@ function registerAddCommand(bot: any) {
           "processing"
         );
 
-        // Create transaction message with appropriate keyboard based on detected type
-        // For /add command, we focus on expense and income only (transfers use /transfer)
-        const transactionType =
-          validatedBillDetail.transaction_type === "income"
-            ? "income"
-            : "expense";
-
-        // Override transaction type if it was detected as transfer
-        if (validatedBillDetail.transaction_type === "transfer") {
-          validatedBillDetail.transaction_type = "expense";
-        }
-
-        const transactionMessage = formatTransactionMessage(
-          transactionType,
+        // Create transaction message with transfer keyboard
+        const transactionMessage = formatTransferMessage(
           transactionId,
           validatedBillDetail,
           currencyValidation.warning
         );
-
-        // Select appropriate keyboard based on transaction type (expense or income only)
-        let keyboard;
-        if (transactionType === "income") {
-          keyboard = await createIncomeKeyboard(
-            transactionId,
-            validatedBillDetail
-          );
-        } else {
-          keyboard = await createExpenseKeyboard(
-            transactionId,
-            validatedBillDetail
-          );
-        }
+        const keyboard = await createTransferKeyboard(
+          transactionId,
+          validatedBillDetail
+        );
 
         // Update the message with transaction details and keyboard
         bot.editMessageText(transactionMessage, {
@@ -277,7 +260,7 @@ function registerAddCommand(bot: any) {
       } else {
         bot.editMessageText(
           general ||
-            "I couldn't understand your transaction. Please try again with more details.",
+            "I couldn't understand your transfer request. Please try again with more details.",
           {
             chat_id: chatId,
             message_id: previewMessage.message_id,
@@ -289,7 +272,7 @@ function registerAddCommand(bot: any) {
       await sendTemporaryMessage(
         bot,
         chatId,
-        "📸 Send me a photo of your receipt or describe your expense/income\n\nExample:\n• /add [photo]\n• /add Spent $15 on coffee at Starbucks\n• /add Got $500 salary payment\n\nFor transfers, use /transfer command",
+        "🔄 Send me a photo of your transfer receipt or describe your transfer\n\nExample:\n• /transfer [photo]\n• /transfer Move $100 from savings to checking account",
         8000 // Auto-delete after 8 seconds
       );
     }
@@ -297,61 +280,47 @@ function registerAddCommand(bot: any) {
 }
 
 /**
- * Format transaction message for display
+ * Format transfer transaction message for display
  */
-function formatTransactionMessage(
-  type: string,
+function formatTransferMessage(
   transactionId: number,
   billDetail: any,
   warning?: string
 ): string {
-  const typeEmoji = getTransactionTypeEmoji(type);
-  const typeName = getTransactionTypeName(type);
+  const amount = billDetail.total_price || billDetail.amount || "100.00";
+  const date = formatDate(billDetail.date);
+  const fromAccount = billDetail.account || billDetail.from_account || "none";
+  const toAccount =
+    billDetail.destination_account || billDetail.to_account || "Cash";
+  const fromCurrency = billDetail.currency_code || "USD";
+  const toCurrency = billDetail.destination_currency || fromCurrency;
+  const exchangeRate = billDetail.exchange_rate || "1.0";
+  const destinationAmount =
+    billDetail.destination_amount ||
+    (parseFloat(amount) / parseFloat(exchangeRate)).toFixed(2);
+  const fee = billDetail.fee || 0;
 
-  const currencySymbol = getCurrencySymbol(billDetail.currency_code);
+  const fromSymbol = getCurrencySymbol(fromCurrency);
+  const toSymbol = getCurrencySymbol(toCurrency);
+  const totalDeducted =
+    fee > 0 ? (parseFloat(amount) + parseFloat(fee)).toFixed(2) : amount;
+
   const warningText = warning ? `\n\n⚠️ ${warning}` : "";
 
-  return `💰 Amount: ${currencySymbol}${
-    billDetail.total_price || billDetail.amount || "25.50"
+  let transferText = `📤 From: ${fromSymbol}${amount} ${fromCurrency} (${fromAccount})
+📥 To: ${toSymbol}${destinationAmount} ${toCurrency} (${toAccount})
+💱 Rate: ${exchangeRate} ${fromCurrency}/${toCurrency}
+📅 Date: ${date}`;
+
+  if (fee > 0) {
+    transferText += `\n💸 Fee: ${fromSymbol}${fee} ${fromCurrency}
+💰 Total Deducted: ${fromSymbol}${totalDeducted} ${fromCurrency}`;
   }
-📅 Date: ${formatDate(billDetail.date)}
-📂 Category: ${billDetail.category || "none"}
-💳 Account: ${billDetail.account || "none"}${warningText}
+
+  return `${transferText}${warningText}
 
 ---
-MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
-}
-
-/**
- * Get emoji for transaction type
- */
-function getTransactionTypeEmoji(type: string): string {
-  const emojis: Record<string, string> = {
-    expense: "💸",
-    income: "💰",
-    transfer: "🔄",
-    lend: "🤝",
-    borrow: "🙏",
-    debt_payment: "💳",
-    debt_received: "💵",
-  };
-  return emojis[type] || "💸";
-}
-
-/**
- * Get name for transaction type
- */
-function getTransactionTypeName(type: string): string {
-  const names: Record<string, string> = {
-    expense: "Expense",
-    income: "Income",
-    transfer: "Transfer",
-    lend: "Lend Money",
-    borrow: "Borrow Money",
-    debt_payment: "Debt Payment",
-    debt_received: "Debt Received",
-  };
-  return names[type] || "Expense";
+MENU: 🔄 Transfer Transaction #${transactionId} 👇`;
 }
 
 /**
@@ -379,4 +348,4 @@ function formatDate(date: any): string {
   return date.toLocaleDateString();
 }
 
-export { registerAddCommand };
+export { registerTransferCommand };

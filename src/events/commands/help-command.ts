@@ -15,7 +15,8 @@ function registerHelpCommand(bot: any) {
 
 **Commands:**
 • \`/init\` - Set up a new Google Sheets workbook for tracking
-• \`/add\` - Add new transaction (followed by photo or text)
+• \`/add\` - Add new expense/income transaction (followed by photo or text)
+• \`/transfer\` - Add transfer transaction (followed by photo or text)
 • \`/pending\` - List all pending transactions
 • \`/update\` - Update dashboard layout based on reference sheet changes
 • \`/help\` - Show this help message
@@ -32,7 +33,8 @@ function registerHelpCommand(bot: any) {
 • \`/add\` [then send photo of receipt]
 • \`/add Spent $15 on lunch at McDonald's\`
 • \`/add Got $500 salary payment\`
-• \`/add Transfer $100 from savings to checking\`
+• \`/transfer Transfer $100 from savings to checking\`
+• \`/transfer Move €50 from main card to cash wallet\`
 
 **Template Editing:**
 Use the "✏️ Edit More" button to edit multiple fields at once:
