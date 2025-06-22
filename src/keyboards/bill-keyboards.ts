@@ -10,6 +10,10 @@ import {
   isPlaceholderFeature,
 } from "../types/callback.types";
 import { getDefaultAccount, getDefaultCategory } from "../utils/defaults";
+import {
+  TransactionTypeUtils,
+  TRANSACTION_TYPE_VALUES,
+} from "../utils/constants";
 
 /**
  * Create expense transaction keyboard
@@ -769,32 +773,14 @@ async function formatSubmittedBillMessage(
  * Get transaction type emoji
  */
 function getTransactionTypeEmoji(type: string): string {
-  const emojis: Record<string, string> = {
-    expense: "💸",
-    income: "💰",
-    transfer: "🔄",
-    lend: "🤝",
-    borrow: "🙏",
-    debt_payment: "💳",
-    debt_received: "💵",
-  };
-  return emojis[type] || "💸";
+  return TransactionTypeUtils.getEmoji(type as any) || "💸";
 }
 
 /**
  * Get transaction type name
  */
 function getTransactionTypeName(type: string): string {
-  const names: Record<string, string> = {
-    expense: "Expense",
-    income: "Income",
-    transfer: "Transfer",
-    lend: "Lend Money",
-    borrow: "Borrow Money",
-    debt_payment: "Debt Payment",
-    debt_received: "Debt Received",
-  };
-  return names[type] || "Expense";
+  return TransactionTypeUtils.getDisplayName(type as any) || "Expense";
 }
 
 /**

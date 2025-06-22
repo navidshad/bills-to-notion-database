@@ -16,6 +16,8 @@ import {
   sendTemporaryMessage,
   trackMessageForTransaction,
 } from "../../utils/message-tracker";
+import { BillRecord, billRecordSchema } from "../../types/bill.types";
+import { TransactionTypeUtils } from "../../utils/constants";
 
 /**
  * Register /add command
@@ -326,32 +328,14 @@ MENU: ${typeEmoji} ${typeName} Transaction #${transactionId} 👇`;
  * Get emoji for transaction type
  */
 function getTransactionTypeEmoji(type: string): string {
-  const emojis: Record<string, string> = {
-    expense: "💸",
-    income: "💰",
-    transfer: "🔄",
-    lend: "🤝",
-    borrow: "🙏",
-    debt_payment: "💳",
-    debt_received: "💵",
-  };
-  return emojis[type] || "💸";
+  return TransactionTypeUtils.getEmoji(type as any) || "💸";
 }
 
 /**
  * Get name for transaction type
  */
 function getTransactionTypeName(type: string): string {
-  const names: Record<string, string> = {
-    expense: "Expense",
-    income: "Income",
-    transfer: "Transfer",
-    lend: "Lend Money",
-    borrow: "Borrow Money",
-    debt_payment: "Debt Payment",
-    debt_received: "Debt Received",
-  };
-  return names[type] || "Expense";
+  return TransactionTypeUtils.getDisplayName(type as any) || "Expense";
 }
 
 /**

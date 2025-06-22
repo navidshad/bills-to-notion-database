@@ -1,3 +1,5 @@
+import { TRANSACTION_TYPE_VALUES } from "../utils/constants";
+
 export interface SheetField {
   name: string;
   type: "string" | "number" | "date" | "currency" | "json" | "boolean";
@@ -121,7 +123,6 @@ export class SheetsConfig {
           name: "Transaction Type",
           type: "string",
           required: true,
-          default: "Expense",
         },
         { name: "Account", type: "string", required: true },
         { name: "Destination Account", type: "string" },
@@ -1196,13 +1197,6 @@ export class SheetsConfig {
         destinationAmountFieldIndex + 1
       );
 
-      // Define transaction types
-      const TRANSACTION_TYPES = {
-        INCOME: "Income",
-        EXPENSE: "Expense",
-        TRANSFER: "Transfer",
-      };
-
       // Setup account data with formulas
       const accountData = [];
       for (let i = 0; i < actualAccountCount; i++) {
@@ -1216,7 +1210,7 @@ export class SheetsConfig {
         const currencyFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", Reference!${currencyColumn}${referenceRow}, "")`;
 
         // Balance formula
-        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPES.TRANSFER}"), "")`;
+        const balanceFormula = `=IF(Reference!${idColumn}${referenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.INCOME}")-SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${amountColumn}:${amountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${accountColumn}:${accountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.EXPENSE}")+SUMIFS(INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAmountColumn}:${destinationAmountColumn}"),INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${destinationAccountColumn}:${destinationAccountColumn}"),Reference!${idColumn}${referenceRow},INDIRECT("'Bills_"&${yearValueColumn}$${yearValueRow}&"'!${transactionTypeColumn}:${transactionTypeColumn}"),"${TRANSACTION_TYPE_VALUES.TRANSFER}"), "")`;
 
         accountData.push([accountNameFormula, currencyFormula, balanceFormula]);
       }
@@ -1560,10 +1554,10 @@ export class SheetsConfig {
         const categoryNameFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", Reference!${categoryEmojiColumn}${categoryReferenceRow}&" "&Reference!${categoryNameColumn}${categoryReferenceRow}, "")`;
 
         // Monthly expense amount formula using direct month number (now that dropdown stores numbers)
-        const amountFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsCategoryColumn}:${billsCategoryColumn}"), Reference!${categoryNameColumn}${categoryReferenceRow}, INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "Expense", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1), "")`;
+        const amountFormula = `=IF(Reference!${categoryNameColumn}${categoryReferenceRow}<>"", SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsCategoryColumn}:${billsCategoryColumn}"), Reference!${categoryNameColumn}${categoryReferenceRow}, INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "${TRANSACTION_TYPE_VALUES.EXPENSE}", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1), "")`;
 
         // Calculate total monthly expenses (using direct month number)
-        const totalExpensesFormula = `SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "Expense", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1)`;
+        const totalExpensesFormula = `SUMIFS(INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsAmountColumn}:${billsAmountColumn}"), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsTransactionTypeColumn}:${billsTransactionTypeColumn}"), "${TRANSACTION_TYPE_VALUES.EXPENSE}", INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), ">="&DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), INDIRECT("'Bills_"&${configValueColumn}$${yearValueRow}&"'!${billsDateColumn}:${billsDateColumn}"), "<"&EOMONTH(DATE(${configValueColumn}$${yearValueRow}, ${expensesValueColumn}$${monthValueRow}, 1), 0)+1)`;
 
         // Percentage formula - reference the amount column (second column in the section)
         const amountColumnInSection = context.numberToColumn(
