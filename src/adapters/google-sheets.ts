@@ -93,7 +93,13 @@ export class GoogleSheetsAdapter {
 
       // Set up headers and data for all required sheets
       await this.setupSheetHeaders("bills", currentYear);
-      await this.setupReferenceData();
+
+      // Setup reference data structure (preserves existing data)
+      await this.setupReferenceDataStructure();
+
+      // Check if reference data needs initialization (first-time setup)
+      await this.checkAndInitializeReferenceData();
+
       await this.setupSheetHeaders("config");
       await this.setupSheetHeaders("tempBills");
       await this.setupDashboard();
@@ -166,7 +172,7 @@ export class GoogleSheetsAdapter {
       await SheetsConfig.calculateSectionPositions(config.grid);
 
       if (sheetKey === "reference") {
-        await this.setupReferenceData();
+        await this.setupReferenceDataStructure();
       } else if (sheetKey === "dashboard") {
         await this.setupDashboard();
       }
@@ -186,6 +192,162 @@ export class GoogleSheetsAdapter {
     }
 
     await this.setupSheetHeaders("tempBills");
+  }
+
+  /**
+   * Get actual data range for a section by reading the real data
+   * This ensures we only get rows with actual data, not empty rows
+   */
+  async getActualSectionDataRange(
+    section: any,
+    startRow: number
+  ): Promise<string> {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    const sheetName = SheetsConfig.getSheetName("reference");
+
+    // First, get a large range to read all possible data
+    const largeRange = `${sheetName}!${section._calculated.startColumn}${startRow}:${section._calculated.endColumn}1000`;
+
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: largeRange,
+      });
+
+      const rows = response.data.values || [];
+
+      // Find the last row with actual data (has at least ID field)
+      let lastDataRow = startRow - 1; // Start before the data range
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        // Check if row has actual data (at least ID field is present)
+        if (
+          row &&
+          row.length > 1 &&
+          row[1] &&
+          row[1].toString().trim() !== ""
+        ) {
+          lastDataRow = startRow + i;
+        }
+      }
+
+      // If no data found, return empty range
+      if (lastDataRow < startRow) {
+        return `${section._calculated.startColumn}${startRow}:${section._calculated.endColumn}${startRow}`;
+      }
+
+      return `${section._calculated.startColumn}${startRow}:${section._calculated.endColumn}${lastDataRow}`;
+    } catch (error) {
+      console.error("Error getting actual section data range:", error);
+      // Fallback to default range
+      return SheetsConfig.getSectionDataRange(section, startRow);
+    }
+  }
+
+  /**
+   * Setup reference data structure only (titles, headers, formatting)
+   * This preserves existing data and only sets up the structure
+   */
+  async setupReferenceDataStructure() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    const sheetName = SheetsConfig.getSheetName("reference");
+    const config = SheetsConfig.SHEETS.reference;
+
+    if (config.grid) {
+      // Ensure positions are calculated first
+      await SheetsConfig.calculateSectionPositions(config.grid);
+
+      const allSections = SheetsConfig.getAllSections("reference");
+
+      for (const section of allSections) {
+        if (!section._calculated) {
+          throw new Error(
+            "Section positions not calculated. Call calculateSectionPositions first."
+          );
+        }
+
+        // Setup section title
+        const titleRange = SheetsConfig.getSectionHeaderRange(
+          section,
+          section._calculated.startRow
+        );
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${titleRange}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [[section.title]],
+          },
+        });
+
+        // Setup column headers
+        const headerRange = SheetsConfig.getSectionHeaderRange(
+          section,
+          section._calculated.startRow + 1
+        );
+        const headers = section.table.fields.map((field) => field.name);
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!${headerRange}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [headers],
+          },
+        });
+      }
+    }
+
+    // Add visual formatting with colored borders and background
+    await this.formatSheet("reference");
+  }
+
+  /**
+   * Initialize reference data with default values (first-time setup only)
+   * This should only be called when the sheet is completely empty
+   */
+  async initializeReferenceData() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    const sheetName = SheetsConfig.getSheetName("reference");
+    const config = SheetsConfig.SHEETS.reference;
+
+    if (config.grid) {
+      // Ensure positions are calculated first
+      await SheetsConfig.calculateSectionPositions(config.grid);
+
+      const allSections = SheetsConfig.getAllSections("reference");
+
+      for (const section of allSections) {
+        if (!section._calculated) {
+          throw new Error(
+            "Section positions not calculated. Call calculateSectionPositions first."
+          );
+        }
+
+        // Setup default data only if section has defaultData
+        if (section.table.defaultData) {
+          const dataStartRow = section._calculated.startRow + 2; // After title and headers
+          const endRow = dataStartRow + section.table.defaultData.length - 1;
+          const fullRange = `${sheetName}!${section._calculated.startColumn}${dataStartRow}:${section._calculated.endColumn}${endRow}`;
+
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: fullRange,
+            valueInputOption: "RAW",
+            requestBody: { values: section.table.defaultData },
+          });
+        }
+      }
+    }
   }
 
   async setupReferenceData() {
@@ -1389,7 +1551,7 @@ export class GoogleSheetsAdapter {
   }
 
   async getCategories() {
-    await this.setupReferenceData();
+    await this.setupReferenceDataStructure();
 
     try {
       const sheetName = SheetsConfig.getSheetName("reference");
@@ -1399,7 +1561,8 @@ export class GoogleSheetsAdapter {
         throw new Error("Categories section not found in configuration");
       }
 
-      const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+      // Use dynamic range that reads actual data
+      const dataRange = await this.getActualSectionDataRange(section, 3);
       const range = `${sheetName}!${dataRange}`;
 
       const response = await this.sheets.spreadsheets.values.get({
@@ -1447,7 +1610,7 @@ export class GoogleSheetsAdapter {
   }
 
   async getAccounts() {
-    // await this.setupReferenceData();
+    await this.setupReferenceDataStructure();
 
     try {
       const sheetName = SheetsConfig.getSheetName("reference");
@@ -1457,7 +1620,8 @@ export class GoogleSheetsAdapter {
         throw new Error("Accounts section not found in configuration");
       }
 
-      const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+      // Use dynamic range that reads actual data
+      const dataRange = await this.getActualSectionDataRange(section, 3);
       const range = `${sheetName}!${dataRange}`;
 
       const response = await this.sheets.spreadsheets.values.get({
@@ -1498,7 +1662,7 @@ export class GoogleSheetsAdapter {
   }
 
   async getIncomeSources() {
-    await this.setupReferenceData();
+    await this.setupReferenceDataStructure();
 
     try {
       const sheetName = SheetsConfig.getSheetName("reference");
@@ -1508,7 +1672,8 @@ export class GoogleSheetsAdapter {
         throw new Error("Income sources section not found in configuration");
       }
 
-      const dataRange = SheetsConfig.getSectionDataRange(section, 3);
+      // Use dynamic range that reads actual data
+      const dataRange = await this.getActualSectionDataRange(section, 3);
       const range = `${sheetName}!${dataRange}`;
 
       const response = await this.sheets.spreadsheets.values.get({
@@ -1675,10 +1840,24 @@ export class GoogleSheetsAdapter {
       // Normalize currency to uppercase
       const normalizedCurrency = currency.toUpperCase();
 
-      // Get current accounts to find the next available row in accounts section (G3:L)
+      // Get accounts section configuration
+      const section = SheetsConfig.getSection("reference", "accounts");
+      if (!section) {
+        throw new Error("Accounts section not found in configuration");
+      }
+
+      // Ensure section positions are calculated
+      await SheetsConfig.calculateSectionPositions(
+        SheetsConfig.SHEETS.reference.grid!
+      );
+
+      // Get current accounts using dynamic range
+      const dataRange = await this.getActualSectionDataRange(section, 3);
+      const range = `Reference!${dataRange}`;
+
       const currentData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: "Reference!G3:L",
+        range,
       });
 
       const rows = currentData.data.values || [];
@@ -1693,10 +1872,13 @@ export class GoogleSheetsAdapter {
       const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
       const accountNumber = rows.length + 1; // Next number in sequence
 
-      // Append the new account to accounts section (starting at column G)
+      // Append the new account to accounts section using dynamic range
+      const appendRange = `Reference!${
+        section._calculated!.startColumn
+      }${nextRow}:${section._calculated!.endColumn}${nextRow}`;
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Reference!G${nextRow}:L${nextRow}`,
+        range: appendRange,
         valueInputOption: "RAW",
         requestBody: {
           values: [
@@ -1736,10 +1918,24 @@ export class GoogleSheetsAdapter {
         throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
       }
 
-      // Get current categories to find the next available row in categories section (A3:E)
+      // Get categories section configuration
+      const section = SheetsConfig.getSection("reference", "categories");
+      if (!section) {
+        throw new Error("Categories section not found in configuration");
+      }
+
+      // Ensure section positions are calculated
+      await SheetsConfig.calculateSectionPositions(
+        SheetsConfig.SHEETS.reference.grid!
+      );
+
+      // Get current categories using dynamic range
+      const dataRange = await this.getActualSectionDataRange(section, 3);
+      const range = `Reference!${dataRange}`;
+
       const currentData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: "Reference!A3:E",
+        range,
       });
 
       const rows = currentData.data.values || [];
@@ -1754,10 +1950,13 @@ export class GoogleSheetsAdapter {
       const nextRow = 3 + rows.length; // Start from row 3 (after section title and headers)
       const categoryNumber = rows.length + 1; // Next number in sequence
 
-      // Append the new category to categories section (starting at column A)
+      // Append the new category to categories section using dynamic range
+      const appendRange = `Reference!${
+        section._calculated!.startColumn
+      }${nextRow}:${section._calculated!.endColumn}${nextRow}`;
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Reference!A${nextRow}:E${nextRow}`,
+        range: appendRange,
         valueInputOption: "RAW",
         requestBody: {
           values: [[categoryNumber, id, name, emoji, description]],
@@ -2565,6 +2764,47 @@ export class GoogleSheetsAdapter {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  /**
+   * Check if reference data needs initialization and initialize if needed
+   * This prevents overwriting existing data
+   */
+  async checkAndInitializeReferenceData() {
+    if (!this.spreadsheetId) {
+      throw new Error("GOOGLE_SPREADSHEET_ID environment variable not set");
+    }
+
+    try {
+      const sheetName = SheetsConfig.getSheetName("reference");
+
+      // Check if any data exists in the reference sheet
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A1:Z1000`,
+      });
+
+      const rows = response.data.values || [];
+      const hasData = rows.some(
+        (row: any[]) =>
+          row && row.some((cell: any) => cell && cell.toString().trim() !== "")
+      );
+
+      if (!hasData) {
+        console.log(
+          "Reference sheet is empty, initializing with default data..."
+        );
+        await this.initializeReferenceData();
+      } else {
+        console.log(
+          "Reference sheet has existing data, skipping initialization"
+        );
+      }
+    } catch (error) {
+      console.error("Error checking reference data:", error);
+      // If we can't check, assume it needs initialization
+      await this.initializeReferenceData();
     }
   }
 }
